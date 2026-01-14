@@ -27,25 +27,37 @@
 
 import { CGMinerAPI, CGMinerAPIResult, CGMinerStatus } from '../../src/cg-miner-api';
 
+// Load environment variables if .env file exists
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+try {
+  require('dotenv').config();
+} catch (e) {
+  // dotenv is optional - continue without it
+}
+
 // CONFIGURE YOUR MINERS HERE
-// Add your real miner IPs and ports
+// Option 1: Use environment variables (recommended)
+// Create a .env file from .env.example and set MINER_*_IP values
+// Option 2: Replace the placeholder IPs below with your actual miner IPs
 const MINERS = [
   {
-    name: 'Avalon-01',
-    ip: '192.168.1.122',
-    port: 4028,
-    model: 'Avalon 1246',
-    location: 'Rack A, Bay 1',
+    name: process.env.MINER_1_NAME || 'Avalon-01',
+    ip: process.env.MINER_1_IP || '192.168.1.100', // Replace with your miner IP
+    port: parseInt(process.env.MINER_1_PORT || '4028', 10),
+    model: process.env.MINER_1_MODEL || 'Avalon Miner',
   },
   {
-    name: 'Avalon-02',
-    ip: '192.168.1.130',
-    port: 4028,
-    model: 'Avalon 1246',
-    location: 'Rack A, Bay 2',
+    name: process.env.MINER_2_NAME || 'Avalon-02',
+    ip: process.env.MINER_2_IP || '192.168.1.101', // Replace with your miner IP
+    port: parseInt(process.env.MINER_2_PORT || '4028', 10),
+    model: process.env.MINER_2_MODEL || 'Avalon Miner',
   },
   // Add more miners as needed
-];
+].filter(miner => {
+  // Only include miners that have been configured (either via env vars or manually edited)
+  const isPlaceholder = miner.ip === '192.168.1.100' || miner.ip === '192.168.1.101';
+  return !isPlaceholder || process.env.MINER_1_IP || process.env.MINER_2_IP;
+});
 
 // Skip tests if no miners configured or INTEGRATION_TESTS env var is not set
 const shouldRunIntegrationTests = MINERS.length > 0 && process.env.INTEGRATION_TESTS === 'true';

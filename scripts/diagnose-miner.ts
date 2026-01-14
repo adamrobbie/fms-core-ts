@@ -18,7 +18,7 @@ const PORT = parseInt(process.argv[3] || '4028', 10);
 
 if (!IP) {
   console.error('Usage: ts-node scripts/diagnose-miner.ts <IP> [PORT]');
-  console.error('Example: ts-node scripts/diagnose-miner.ts 192.168.1.122 4028');
+  console.error('Example: ts-node scripts/diagnose-miner.ts 192.168.1.100 4028');
   process.exit(1);
 }
 

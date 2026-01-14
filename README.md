@@ -83,13 +83,22 @@ async function upgradeFirmware(
 
 ## Testing Against Real Miners
 
-Quick start:
-1. Edit `scripts/test-miners.ts` with your miner IPs
+### Quick Start
+
+**Option 1: Using Environment Variables (Recommended)**
+1. Copy `.env.example` to `.env`: `cp .env.example .env`
+2. Edit `.env` and add your miner IPs
+3. Run: `npm run test:miners`
+
+**Option 2: Direct Configuration**
+1. Edit `scripts/test-miners.ts` and replace placeholder IPs (`192.168.1.100`, `192.168.1.101`) with your actual miner IPs
 2. Run: `npm run test:miners`
 
-For integration tests:
-1. Edit `tests/integration/miners.test.ts` with your miner IPs
+### Integration Tests
+1. Configure miners using `.env` file or edit `tests/integration/miners.test.ts`
 2. Run: `INTEGRATION_TESTS=true npm run test:integration`
+
+**Note:** The `.env` file is gitignored and will not be committed to the repository.
 
 ## Development
 
