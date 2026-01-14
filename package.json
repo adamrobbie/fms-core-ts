@@ -1,0 +1,50 @@
+{
+  "name": "fms-core",
+  "version": "0.0.3",
+  "description": "The core functions that Canaan FMS and other miner management systems needed to communicate with and control Avalon miners.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "fmsc": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:integration": "INTEGRATION_TESTS=true jest tests/integration",
+    "test:miners": "npm run build && npm run build:scripts && node dist/scripts/test-miners.js",
+    "build:scripts": "tsc -p tsconfig.scripts.json",
+    "test:miners:dev": "ts-node scripts/test-miners.ts",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "avalon",
+    "miner",
+    "canaan",
+    "firmware",
+    "upgrade"
+  ],
+  "author": "Canaan",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Canaan-Creative/fms-core"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "commander": "^11.0.0"
+  }
+}
