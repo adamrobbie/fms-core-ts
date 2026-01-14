@@ -28,64 +28,156 @@
  * - fmsc v0.0.3
  */
 
-import { Command } from 'commander';
 import { upgradeFirmware } from './upgrade';
 import { UpgradeResults } from './aio-upgrade';
 import { VERSION } from './index';
 import { logger, LogLevel } from './logger';
 
-const program = new Command();
+interface ParsedArgs {
+  command?: string;
+  ip?: string;
+  port?: string;
+  file?: string;
+  timeout?: string;
+  logLevel?: string;
+  help?: boolean;
+  version?: boolean;
+}
 
-program
-  .name('fmsc')
-  .description('Query or control Avalon miners')
-  .version(VERSION);
+function parseArgs(args: string[]): ParsedArgs {
+  const parsed: ParsedArgs = {};
+  let i = 0;
 
-program
-  .option('--log <level>', 'logging level', 'info')
-  .option('-l, --log-level <level>', 'logging level (debug, info, warn, error)', 'info')
-  .hook('preAction', (thisCommand) => {
-    const logLevel = thisCommand.opts().logLevel || thisCommand.opts().log || 'info';
-    const level = LogLevel[logLevel.toUpperCase() as keyof typeof LogLevel];
+  while (i < args.length) {
+    const arg = args[i];
+    
+    if (arg === '-h' || arg === '--help') {
+      parsed.help = true;
+    } else if (arg === '-v' || arg === '--version') {
+      parsed.version = true;
+    } else if (arg === '--log-level' || arg === '-l' || arg === '--log') {
+      parsed.logLevel = args[++i];
+    } else if (arg === '--ip' || arg === '-I') {
+      parsed.ip = args[++i];
+    } else if (arg === '--port' || arg === '-P') {
+      parsed.port = args[++i];
+    } else if (arg === '--file' || arg === '-F') {
+      parsed.file = args[++i];
+    } else if (arg === '--timeout' || arg === '-T') {
+      parsed.timeout = args[++i];
+    } else if (!arg.startsWith('-') && !parsed.command) {
+      parsed.command = arg;
+    }
+    i++;
+  }
+
+  return parsed;
+}
+
+function showHelp(): void {
+  console.log(`
+Query or control Avalon miners
+
+Usage:
+  fmsc <command> [options]
+
+Commands:
+  upgrade              Upgrade firmware for one Avalon miner
+
+Options:
+  -h, --help          Show help
+  -v, --version       Show version
+  -l, --log-level     Logging level (debug, info, warn, error) [default: info]
+
+Upgrade Options:
+  --ip, -I <ip>       Avalon miner IP address (required)
+  --port, -P <port>   Avalon miner API port [default: 4028]
+  --file, -F <file>   Avalon miner firmware file path (required)
+  --timeout, -T <sec> Upgrade timeout in seconds [default: 720]
+
+Examples:
+  fmsc upgrade --ip 192.168.1.123 --file firmware.aup
+  fmsc upgrade --ip 192.168.1.123 --file firmware.aup --port 4028 --timeout 720
+
+More information: https://github.com/Canaan-Creative/fms-core
+`);
+}
+
+function showVersion(): void {
+  console.log(`fmsc v${VERSION}`);
+}
+
+export function main(): void {
+  const args = process.argv.slice(2);
+  
+  if (args.length === 0) {
+    showHelp();
+    return;
+  }
+
+  const parsed = parseArgs(args);
+
+  // Set log level
+  if (parsed.logLevel) {
+    const level = LogLevel[parsed.logLevel.toUpperCase() as keyof typeof LogLevel];
     if (level !== undefined) {
       logger.setLevel(level);
     }
-  });
+  }
 
-program
-  .command('upgrade')
-  .description('upgrade firmware for one Avalon miner')
-  .requiredOption('--ip <ip>', 'Avalon miner IP address, such as 192.168.1.123')
-  .option('-I, --ip <ip>', 'Avalon miner IP address')
-  .option('-P, --port <port>', 'Avalon miner API port', '4028')
-  .requiredOption('--file <file>', 'Avalon miner firmware file path')
-  .option('-F, --file <file>', 'Avalon miner firmware file path')
-  .option('-T, --timeout <timeout>', 'Upgrade timeout in seconds', '720')
-  .action(async (options) => {
-    const ip = options.ip;
-    const port = parseInt(options.port || '4028', 10);
-    const file = options.file;
-    const timeout = parseInt(options.timeout || '720', 10);
+  // Handle global options
+  if (parsed.help) {
+    showHelp();
+    return;
+  }
 
-    let success = false;
-    let upgradeResult: UpgradeResults = UpgradeResults.unexpectedError;
+  if (parsed.version) {
+    showVersion();
+    return;
+  }
 
-    try {
-      [success, upgradeResult] = await upgradeFirmware(ip, port, file, timeout);
-    } finally {
-      logger.info(
-        `upgrade ${ip}:${port} firmware to ${file} finish: ${
-          success ? 'success' : 'failed'
-        } with ${upgradeResult}`
-      );
+  // Handle commands
+  if (parsed.command === 'upgrade') {
+    if (!parsed.ip) {
+      console.error('Error: --ip is required');
+      console.error('Run "fmsc upgrade --help" for usage information');
+      process.exit(1);
     }
-  });
 
-export function main(): void {
-  program.parse(process.argv);
+    if (!parsed.file) {
+      console.error('Error: --file is required');
+      console.error('Run "fmsc upgrade --help" for usage information');
+      process.exit(1);
+    }
 
-  if (process.argv.length <= 2) {
-    program.help();
+    const ip = parsed.ip;
+    const port = parseInt(parsed.port || '4028', 10);
+    const file = parsed.file;
+    const timeout = parseInt(parsed.timeout || '720', 10);
+
+    (async () => {
+      let success = false;
+      let upgradeResult: UpgradeResults = UpgradeResults.unexpectedError;
+
+      try {
+        [success, upgradeResult] = await upgradeFirmware(ip, port, file, timeout);
+      } finally {
+        logger.info(
+          `upgrade ${ip}:${port} firmware to ${file} finish: ${
+            success ? 'success' : 'failed'
+          } with ${upgradeResult}`
+        );
+        process.exit(success ? 0 : 1);
+      }
+    })().catch((error: unknown) => {
+      const err = error as Error;
+      logger.error(`upgrade failed: ${err.message || String(error)}`);
+      process.exit(1);
+    });
+  } else {
+    console.error(`Unknown command: ${parsed.command || 'none'}`);
+    console.error('Run "fmsc --help" for usage information');
+    process.exit(1);
   }
 }
 
