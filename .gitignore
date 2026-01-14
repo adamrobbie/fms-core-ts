@@ -6,6 +6,9 @@ dist/
 .agents_local/
 
 # TypeScript build artifacts
+# Compiled JavaScript files (should only be in dist/)
+src/**/*.js
+src/**/*.js.map
 *.js.map
 *.d.ts.map
 

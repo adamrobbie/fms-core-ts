@@ -127,10 +127,12 @@ export class CGMinerAPIResult {
     this.msg = msg;
 
     if (Buffer.isBuffer(response)) {
-      this.response = response.toString('utf-8');
+      // Remove null bytes and other control characters that might break JSON parsing
+      this.response = response.toString('utf-8').replace(/\0/g, '').trim();
       this._responseDict = null;
     } else if (typeof response === 'string') {
-      this.response = response;
+      // Remove null bytes and trim whitespace
+      this.response = response.replace(/\0/g, '').trim();
       this._responseDict = null;
     } else {
       this.response = JSON.stringify(response);
@@ -167,7 +169,14 @@ export class CGMinerAPIResult {
     }
     if (this.result && this.response.length > 0) {
       try {
-        this._responseDict = JSON.parse(this.response) as CGMinerAPIResponse;
+        // Clean response before parsing: remove null bytes, control chars, and trim
+        // Some miners send null-terminated strings or have trailing control characters
+        const cleanedResponse = this.response
+          .replace(/\0/g, '') // Remove null bytes
+          .replace(/[\x00-\x1F\x7F]/g, '') // Remove other control characters except newlines/tabs
+          .trim();
+        
+        this._responseDict = JSON.parse(cleanedResponse) as CGMinerAPIResponse;
       } catch (e: unknown) {
         const errorStr = e instanceof Error ? e.message : String(e);
         let sidx = 0;
@@ -194,6 +203,7 @@ export class CGMinerAPIResult {
             eidx = Math.min(sidx + 2 * peekLen, this.response.length);
           }
         }
+        
         logger.error(
           `load api response failed. ${sidx}:${eidx} <<<${this.response.substring(sidx, eidx)}>>>`
         );

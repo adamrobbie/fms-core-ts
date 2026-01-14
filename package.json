@@ -15,9 +15,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:integration": "INTEGRATION_TESTS=true jest tests/integration",
-    "test:miners": "npm run build && npm run build:scripts && node dist/scripts/test-miners.js",
+    "test:miners": "npm run build && ts-node scripts/test-miners.ts",
+    "diagnose:miner": "npm run build && ts-node scripts/diagnose-miner.ts",
     "build:scripts": "tsc -p tsconfig.scripts.json",
-    "test:miners:dev": "ts-node scripts/test-miners.ts",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [

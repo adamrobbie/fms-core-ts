@@ -3,11 +3,13 @@
 /**
  * Quick test script to check miner connectivity
  * 
- * Usage: npx ts-node scripts/test-miners.ts
- * Or: npm run build && node dist/scripts/test-miners.js
+ * Usage: 
+ *   npm run test:miners:dev  (uses ts-node, imports from src)
+ *   npm run test:miners      (builds and runs compiled version)
  */
 
-import { CGMinerAPI } from '../dist/cg-miner-api';
+// Import from source - works with ts-node
+import { CGMinerAPI } from '../src/cg-miner-api';
 
 // CONFIGURE YOUR MINERS HERE
 const MINERS = [
@@ -44,8 +46,9 @@ async function testMiner(miner: { name: string; ip: string; port: number }) {
       if (summaryResult.isRequestSuccess()) {
         const summary = summaryResult.summary();
         if (summary && Array.isArray(summary) && summary.length > 0) {
-          const s = summary[0];
-          console.log(`  ⚡ Hash Rate: ${s['GHS 5s'] || s['GHS av'] || 'N/A'} GH/s`);
+          const s = summary[0] as Record<string, unknown>;
+          const hashRate = (s['GHS 5s'] || s['GHS av'] || 'N/A') as string | number;
+          console.log(`  ⚡ Hash Rate: ${hashRate} GH/s`);
           console.log(`  ✅ Accepted: ${s.Accepted || 0}`);
           console.log(`  ❌ Rejected: ${s.Rejected || 0}`);
         }
@@ -57,8 +60,9 @@ async function testMiner(miner: { name: string; ip: string; port: number }) {
         const pools = poolsResult.pools();
         if (pools && Array.isArray(pools)) {
           console.log(`  🏊 Pools: ${pools.length}`);
-          pools.forEach((pool: any, i: number) => {
-            console.log(`     ${i + 1}. ${pool.URL || 'N/A'} (Priority: ${pool.Priority || 'N/A'})`);
+          pools.forEach((pool: unknown, i: number) => {
+            const p = pool as Record<string, unknown>;
+            console.log(`     ${i + 1}. ${p.URL || 'N/A'} (Priority: ${p.Priority || 'N/A'})`);
           });
         }
       }
@@ -68,8 +72,9 @@ async function testMiner(miner: { name: string; ip: string; port: number }) {
       console.log(`  ❌ Connection failed: ${versionResult.msg}`);
       return false;
     }
-  } catch (error: any) {
-    console.log(`  ❌ Error: ${error.message}`);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.log(`  ❌ Error: ${err.message || String(error)}`);
     return false;
   }
 }
