@@ -17,6 +17,7 @@
 import * as fs from 'fs';
 import { AupHeader } from './aup-parser';
 import { toStr, toBytes, VirtualListAdder } from './utils';
+import { logger } from './logger';
 
 // Simple CRC32 implementation
 function crc32(buffer: Buffer): number {
@@ -56,7 +57,7 @@ export class AUPHeaderInfo {
         throw new Error('AUP header parser init failed');
       }
     } catch (e: any) {
-      console.error('AUPHeaderInfo init end with exception', e);
+      logger.error('AUPHeaderInfo init end with exception', e instanceof Error ? e.message : String(e));
       this._isLegal = false;
       this._errMsgList.push(`${e.constructor.name}: ${e.message}`);
       return;
@@ -98,7 +99,7 @@ export class AUPHeaderInfo {
       this._isLegal = true;
     } catch (e: any) {
       this._errMsgList.push('analyse_aup_file get exception');
-      console.error(this.errMessage(), e);
+      logger.error(this.errMessage(), e instanceof Error ? e.message : String(e));
     }
   }
 

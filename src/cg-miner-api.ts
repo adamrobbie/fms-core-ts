@@ -25,9 +25,27 @@ import {
   longToBytes,
   toBytes,
 } from './utils';
+import { logger } from './logger';
+import {
+  DEFAULT_PORT,
+  DEFAULT_FIRST_TIMEOUT,
+  DEFAULT_RETRY_COUNT,
+  DEFAULT_TOTAL_TIMEOUT,
+  SOCKET_BUFFER_SIZE,
+  CONNECTION_RETRY_DELAY,
+  RETRY_SLEEP_DELAY,
+  UPGRADE_HEADER_LENGTH,
+  UPGRADE_UID_DEFAULT,
+  UPGRADE_OFFSET_DEFAULT,
+  UPGRADE_CMD_ID_MAX,
+  UPGRADE_SUB_CMD,
+  UPGRADE_RESERVED_BYTES_1,
+  UPGRADE_RESERVED_BYTES_2,
+  UPGRADE_VERSION_MAX_LENGTH,
+  ERR_CODE_CANCELLED,
+} from './constants';
 
-const ERR_CODE_cancelled = 99999;
-export const kDefaultPort = 4028;
+export const kDefaultPort = DEFAULT_PORT;
 
 let suppressLedCommandLog = false;
 
@@ -66,7 +84,20 @@ export interface CGMinerAPIResponse {
     Description?: string;
   }>;
   id?: number;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+export interface VersionResponse {
+  VERSION?: string;
+  VERION?: string; // Typo in some firmware versions
+  UPAPI?: number | string;
+  MAC?: string;
+  DNA?: string;
+  PROD?: string;
+  MODEL?: string;
+  HWTYPE?: string;
+  SWTYPE?: string;
+  [key: string]: unknown;
 }
 
 export class CGMinerAPIResult {
@@ -137,8 +168,8 @@ export class CGMinerAPIResult {
     if (this.result && this.response.length > 0) {
       try {
         this._responseDict = JSON.parse(this.response) as CGMinerAPIResponse;
-      } catch (e: any) {
-        const errorStr = String(e);
+      } catch (e: unknown) {
+        const errorStr = e instanceof Error ? e.message : String(e);
         let sidx = 0;
         let eidx = 100;
         const peekLen = 50;
@@ -163,7 +194,7 @@ export class CGMinerAPIResult {
             eidx = Math.min(sidx + 2 * peekLen, this.response.length);
           }
         }
-        console.error(
+        logger.error(
           `load api response failed. ${sidx}:${eidx} <<<${this.response.substring(sidx, eidx)}>>>`
         );
       }
@@ -240,59 +271,68 @@ export class CGMinerAPIResult {
     return statusDict?.[CGMinerAPIResult.KEY_Code];
   }
 
-  successResponseDict(payloadKey: string): any {
+  successResponseDict(payloadKey: string): unknown[] | null {
     if (this.isRequestSuccess()) {
       const responseDict = this.responseDict();
       if (payloadKey in responseDict) {
-        return responseDict[payloadKey];
+        const payload = responseDict[payloadKey];
+        if (Array.isArray(payload)) {
+          return payload;
+        }
       }
     }
     return null;
   }
 
-  stats(): any {
+  stats(): unknown[] | null {
     return this.successResponseDict('STATS');
   }
 
-  summary(): any {
+  summary(): unknown[] | null {
     return this.successResponseDict('SUMMARY');
   }
 
-  devs(): any {
+  devs(): unknown[] | null {
     return this.successResponseDict('DEVS');
   }
 
-  pools(): any {
+  pools(): unknown[] | null {
     return this.successResponseDict('POOLS');
   }
 
-  debug(): any {
+  debug(): unknown[] | null {
     return this.successResponseDict('DEBUG');
   }
 
-  minerupgrade(): any {
+  minerupgrade(): unknown[] | null {
     return this.successResponseDict('MINERUPGRADE');
   }
 
-  version(): any {
-    return this.successResponseDict('VERSION');
+  version(): VersionResponse[] | null {
+    const result = this.successResponseDict('VERSION');
+    if (result && Array.isArray(result)) {
+      return result as VersionResponse[];
+    }
+    return null;
   }
 
   mm3SoftwareVersion(): string | undefined {
     const versionList = this.version();
-    if (versionList && Array.isArray(versionList) && versionList.length > 0) {
+    if (versionList && versionList.length > 0) {
       const versionObj = versionList[0];
-      if ('VERSION' in versionObj) {
+      if ('VERSION' in versionObj && typeof versionObj.VERSION === 'string') {
         return versionObj.VERSION;
       }
-      return versionObj.VERION; // firmware has a typo at 2019.5.17
+      if ('VERION' in versionObj && typeof versionObj.VERION === 'string') {
+        return versionObj.VERION; // firmware has a typo at 2019.5.17
+      }
     }
     return undefined;
   }
 
   mm3UpgradeApiVersion(): number {
     const versionList = this.version();
-    if (versionList && Array.isArray(versionList) && versionList.length > 0) {
+    if (versionList && versionList.length > 0) {
       const versionObj = versionList[0];
       if ('UPAPI' in versionObj) {
         return str2int(String(versionObj.UPAPI), 1) ?? 1;
@@ -308,48 +348,54 @@ export class CGMinerAPIResult {
 
   mm3Mac(): string | undefined {
     const versionList = this.version();
-    if (versionList && Array.isArray(versionList) && versionList.length > 0) {
-      return versionList[0].MAC;
+    if (versionList && versionList.length > 0) {
+      const mac = versionList[0].MAC;
+      return typeof mac === 'string' ? mac : undefined;
     }
     return undefined;
   }
 
   mm3Dna(): string | undefined {
     const versionList = this.version();
-    if (versionList && Array.isArray(versionList) && versionList.length > 0) {
-      return versionList[0].DNA;
+    if (versionList && versionList.length > 0) {
+      const dna = versionList[0].DNA;
+      return typeof dna === 'string' ? dna : undefined;
     }
     return undefined;
   }
 
   mm3ProductName(): string | undefined {
     const versionList = this.version();
-    if (versionList && Array.isArray(versionList) && versionList.length > 0) {
-      return versionList[0].PROD;
+    if (versionList && versionList.length > 0) {
+      const prod = versionList[0].PROD;
+      return typeof prod === 'string' ? prod : undefined;
     }
     return undefined;
   }
 
   mm3Model(): string | undefined {
     const versionList = this.version();
-    if (versionList && Array.isArray(versionList) && versionList.length > 0) {
-      return versionList[0].MODEL;
+    if (versionList && versionList.length > 0) {
+      const model = versionList[0].MODEL;
+      return typeof model === 'string' ? model : undefined;
     }
     return undefined;
   }
 
   mm3HardwareType(): string | undefined {
     const versionList = this.version();
-    if (versionList && Array.isArray(versionList) && versionList.length > 0) {
-      return versionList[0].HWTYPE;
+    if (versionList && versionList.length > 0) {
+      const hwtype = versionList[0].HWTYPE;
+      return typeof hwtype === 'string' ? hwtype : undefined;
     }
     return undefined;
   }
 
   mm3SoftwareType(): string | undefined {
     const versionList = this.version();
-    if (versionList && Array.isArray(versionList) && versionList.length > 0) {
-      return versionList[0].SWTYPE;
+    if (versionList && versionList.length > 0) {
+      const swtype = versionList[0].SWTYPE;
+      return typeof swtype === 'string' ? swtype : undefined;
     }
     return undefined;
   }
@@ -360,20 +406,29 @@ export interface RequestOptions {
   firstTimeout?: number;
   retry?: number;
   useJsonCommand?: boolean;
-  errorInfo?: Array<Record<string, any>>;
+  errorInfo?: Array<Record<string, unknown>>;
   autoRetryIfRefusedConn?: boolean;
   totalTimeout?: number;
 }
 
+/**
+ * Synchronous CGMiner API request (deprecated)
+ * 
+ * @deprecated This function is not fully implemented in Node.js due to the asynchronous nature
+ * of Node.js sockets. Use `aioRequestCgminerApiBySock` instead for async/await support.
+ * 
+ * @throws {Error} Always throws an error directing users to use the async version
+ */
 export function requestCgminerApiBySock(
   ip: string,
   command: string,
   parameters: string | null,
   options: RequestOptions = {}
 ): CGMinerAPIResult {
-  // Note: Synchronous version is not fully implemented in Node.js
-  // For full async support, use aioRequestCgminerApiBySock
-  throw new Error('Synchronous version not fully implemented. Use aioRequestCgminerApiBySock instead.');
+  throw new Error(
+    'Synchronous version not fully implemented in Node.js. ' +
+    'Use aioRequestCgminerApiBySock() instead for async/await support.'
+  );
 }
 
 // Simplified synchronous version - for full async version, see async implementation below
@@ -423,7 +478,7 @@ export async function aioRequestCgminerApiBySock(
 
     const startTime = Date.now() / 1000;
     if (!suppressLedCommandLog || params.indexOf(',led,') < 0) {
-      console.debug(
+      logger.debug(
         `[${apiRequestId}] [${nowExactStr()}] [ip ${ip} port ${port}] start command ${command} with parameter ${params.substring(0, 60)}`
       );
     }
@@ -469,82 +524,118 @@ export async function aioRequestCgminerApiBySock(
       }
 
       const chunks: Buffer[] = [];
-      let receivedData: Buffer;
+      let streamEnded = false;
+      let maxIterations = 1000; // Safety limit to prevent infinite loops
+      let iterationCount = 0;
 
-      while (true) {
-        receivedData = await new Promise<Buffer>((resolve, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error('Read timeout'));
-          }, timeout * 1000);
+      // Set up end-of-stream handler
+      socket.once('end', () => {
+        streamEnded = true;
+      });
 
-          socket.once('data', (data: Buffer) => {
-            clearTimeout(timeoutId);
-            resolve(data);
+      socket.once('close', () => {
+        streamEnded = true;
+      });
+
+      while (!streamEnded && iterationCount < maxIterations) {
+        iterationCount++;
+        
+        try {
+          const receivedData = await new Promise<Buffer>((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+              reject(new Error('Read timeout'));
+            }, timeout * 1000);
+
+            const dataHandler = (data: Buffer) => {
+              clearTimeout(timeoutId);
+              socket.removeListener('error', errorHandler);
+              resolve(data);
+            };
+
+            const errorHandler = (err: Error) => {
+              clearTimeout(timeoutId);
+              socket.removeListener('data', dataHandler);
+              reject(err);
+            };
+
+            socket.once('data', dataHandler);
+            socket.once('error', errorHandler);
           });
 
-          socket.once('error', (err) => {
-            clearTimeout(timeoutId);
-            reject(err);
-          });
-        });
+          if (receivedData.length === 0) {
+            streamEnded = true;
+            break;
+          }
+          
+          chunks.push(receivedData);
 
-        if (receivedData.length === 0) break;
-        chunks.push(receivedData);
-
-        if (measurableTime() > totalStartTime + totalTimeout) {
-          totalTimeoutErr = true;
-          throw new Error('total timeout');
+          if (measurableTime() > totalStartTime + totalTimeout) {
+            totalTimeoutErr = true;
+            throw new Error('total timeout');
+          }
+        } catch (readError: unknown) {
+          // If it's a timeout or error, check if stream ended
+          if (streamEnded) {
+            break;
+          }
+          throw readError;
         }
+      }
+
+      if (iterationCount >= maxIterations) {
+        logger.warn(`Socket read reached maximum iterations (${maxIterations})`);
       }
 
       bufferList = Buffer.concat(chunks);
       success = true;
       socket.destroy();
-    } catch (e: any) {
-      const exceptErr: Record<string, any> = {};
+    } catch (e: unknown) {
+      const exceptErr: Record<string, unknown> = {};
       let isRefuseConn = false;
+      const error = e as NodeJS.ErrnoException;
 
       if (errorInfo) {
         errorInfo.push(exceptErr);
       }
 
-      if (e.message?.includes('timeout')) {
+      if (error.message?.includes('timeout')) {
         exceptErr['timeout'] = true;
         exceptErr['connect_success'] = connectSuccess;
       }
 
-      if (e.code === 'ECONNREFUSED') {
-        exceptErr['socket_error_no'] = e.errno;
+      if (error.code === 'ECONNREFUSED') {
+        exceptErr['socket_error_no'] = error.errno;
         isRefuseConn = true;
         if (autoRetryIfRefusedConn) {
           unlimitedRetryCount += 1;
           if (
             errorInfo &&
             errorInfo.length >= 2 &&
-            errorInfo[errorInfo.length - 2]?.socket_error_no === e.errno
+            (errorInfo[errorInfo.length - 2] as Record<string, unknown>)?.socket_error_no === error.errno
           ) {
             errorInfo.pop();
           }
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, CONNECTION_RETRY_DELAY));
         }
       }
 
-      if (e.code === 'ECONNRESET') {
+      if (error.code === 'ECONNRESET') {
         unlimitedRetryCount += 1;
       }
 
-      errMsgs.push(`${e.constructor.name}: ${e.message}`);
+      const errorName = error.constructor?.name || 'Error';
+      errMsgs.push(`${errorName}: ${error.message || String(e)}`);
       bufferList = Buffer.alloc(0);
 
-      if (e.code !== 'ECONNREFUSED' && e.code !== 'ECONNRESET' && !isRefuseConn) {
-        console.error(
-          `[${apiRequestId}] [ip ${ip} port ${port}] exception when run command ${command} with parameter ${params.substring(0, 60)}. err: ${e}`
+      if (error.code !== 'ECONNREFUSED' && error.code !== 'ECONNRESET' && !isRefuseConn) {
+        logger.error(
+          `[${apiRequestId}] [ip ${ip} port ${port}] exception when run command ${command} with parameter ${params.substring(0, 60)}. err: ${error}`
         );
       }
     }
 
     if (!success && !cancelEvent?.aborted) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, RETRY_SLEEP_DELAY));
     }
   }
 
@@ -553,16 +644,16 @@ export async function aioRequestCgminerApiBySock(
 
   if (success) {
     response = bufferList;
-    console.info(
+    logger.info(
       `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: success. command ${command} with parameter ${params.substring(0, 60)}. dt: ${deltaTotalTime}`
     );
   } else if (totalTimeoutErr) {
-    console.info(
+    logger.info(
       `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: total timeout. command ${command} with parameter ${params.substring(0, 60)}. dt: ${deltaTotalTime}`
     );
     errMsgs.push(`Total timeout. limit ${totalTimeout}, real ${deltaTotalTime}`);
   } else {
-    console.info(
+    logger.info(
       `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: other error. command ${command} with parameter ${params.substring(0, 60)}. dt: ${deltaTotalTime}. err: ${errMsgs[errMsgs.length - 1]?.substring(0, 100) || 'no err msg'}`
     );
   }
@@ -574,7 +665,7 @@ function canceledResult(): CGMinerAPIResult {
   return CGMinerAPIResult.errorResult(
     Date.now() / 1000,
     'has been canceled',
-    CGMinerStatusCode.Cancelled
+    ERR_CODE_CANCELLED
   );
 }
 
@@ -618,16 +709,21 @@ export class CGMinerAPI {
   static splitMultipleReportApiResult(
     cmdList: string[],
     mulCmdR: CGMinerAPIResult
-  ): Record<string, any> {
+  ): Record<string, CGMinerAPIResult | boolean> {
     const isSuccess = mulCmdR.isRequestSuccess();
-    const allApiResults: Record<string, any> = { result: isSuccess };
+    const allApiResults: Record<string, CGMinerAPIResult | boolean> = { result: isSuccess };
     if (isSuccess) {
       for (const cmd of cmdList) {
         const cmdData = mulCmdR.successResponseDict(cmd);
+        const responseData = Array.isArray(cmdData) && cmdData.length > 0 
+          ? JSON.stringify(cmdData[0])
+          : cmdData !== null 
+            ? JSON.stringify(cmdData)
+            : '';
         allApiResults[cmd] = new CGMinerAPIResult(
           mulCmdR.result,
           mulCmdR.scanTimestamp,
-          Array.isArray(cmdData) && cmdData.length > 0 ? cmdData[0] : cmdData,
+          responseData,
           mulCmdR.tryTimes,
           mulCmdR.msg
         );
@@ -723,7 +819,8 @@ export class CGMinerAPI {
       const msg = response.statusMsg();
       if (msg) {
         const parsed = parseCgminerBracketFormatStrIntoJson(msg);
-        return parsed['LED'] === 1;
+        const ledValue = parsed['LED'];
+        return typeof ledValue === 'number' ? ledValue === 1 : null;
       }
     }
     return null;
@@ -756,8 +853,11 @@ export class CGMinerAPI {
     const debugResult = await CGMinerAPI.getDebugStatus(ip, port, firstTimeout, retry);
     if (debugResult.isRequestSuccess()) {
       const debugData = debugResult.debug();
-      if (Array.isArray(debugData) && debugData.length > 0 && !debugData[0].Debug) {
-        await CGMinerAPI.toggleDebug(ip, port, firstTimeout, retry);
+      if (Array.isArray(debugData) && debugData.length > 0) {
+        const firstDebug = debugData[0] as Record<string, unknown>;
+        if (!firstDebug.Debug) {
+          await CGMinerAPI.toggleDebug(ip, port, firstTimeout, retry);
+        }
       }
       return true;
     } else {

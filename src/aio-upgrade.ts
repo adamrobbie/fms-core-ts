@@ -23,6 +23,14 @@ import {
 } from './cg-miner-api';
 import { AUPFile } from './aup-file';
 import { str2int, str2float, firmwareDateStr, VirtualListAdder } from './utils';
+import { logger } from './logger';
+import {
+  UPGRADE_UID_DEFAULT,
+  UPGRADE_OFFSET_DEFAULT,
+  REBOOT_TIMEOUT,
+  VERSION_CHECK_TIMEOUT,
+  UPGRADE_TIMEOUT_DEFAULT,
+} from './constants';
 
 const kUpgradeErrRe = /.*\s+Err(\d+):/;
 const kUpgradeErrUnexpectedOffsetRe =
@@ -126,8 +134,8 @@ export async function aioMm3Upgrade(
   let upgradeResult = UpgradeResults.unexpectedError;
 
   try {
-    console.info(`upgrade start. ip ${ip}`);
-    const maxGetVerSeconds = 5 * 60;
+    logger.info(`upgrade start. ip ${ip}`);
+    const maxGetVerSeconds = VERSION_CHECK_TIMEOUT;
 
     if (progressReportFxn) {
       progressReportFxn(0, UpgradeStatus.PreCheckVer);
@@ -198,7 +206,7 @@ export async function aioMm3Upgrade(
         let result: CGMinerAPIResult | null = null;
 
         try {
-          console.debug(
+          logger.debug(
             `api call at ${new Date().toISOString()} ${(Date.now() / 1000 - startTime).toFixed(1)} ip: ${ip} port: ${port}`
           );
 
@@ -226,17 +234,18 @@ export async function aioMm3Upgrade(
             }
           }
 
-          console.debug(`${ip} upgrade package result: ${result.debugStr()}`);
+          logger.debug(`${ip} upgrade package result: ${result.debugStr()}`);
           success = result.isRequestSuccess();
-        } catch (e: any) {
-          if (e.message === 'Cancelled') {
+        } catch (e: unknown) {
+          const error = e as Error;
+          if (error.message === 'Cancelled') {
             throw e;
           }
-          console.error(`ip ${ip} port ${port} exception ${e}`);
+          logger.error(`ip ${ip} port ${port} exception ${error.message || String(e)}`);
         }
 
         if (!success && Date.now() / 1000 > startTime + timeout) {
-          console.debug(
+          logger.debug(
             `${ip}:${port} upgrade timeout: from ${startTime} to ${Date.now() / 1000}`
           );
           timeoutError = true;
@@ -259,7 +268,7 @@ export async function aioMm3Upgrade(
                   break;
                 } else {
                   const resultEnum = upgradeResultsFromUpgradeErrCode(errCode!);
-                  console.error(
+                  logger.error(
                     `upgrade result: err code ${errCode} ${resultEnum}. ip ${ip}:${port}`
                   );
                   upgradeResult = resultEnum;
@@ -269,7 +278,7 @@ export async function aioMm3Upgrade(
             }
           }
           repeatTimesForSameOffset += 1;
-          console.debug(
+          logger.debug(
             `repeat for error. repeat_times_for_same_offset ${repeatTimesForSameOffset} at ${ip}:${port}`
           );
 
@@ -279,21 +288,21 @@ export async function aioMm3Upgrade(
               pageLen = Math.max(pageLen - 50, Math.floor(pageLen / 2), minPageLen);
             }
           } else {
-            console.info(`cgminer api error: ip: ${ip}, result: ${result.responseStr()}`);
+            logger.info(`cgminer api error: ip: ${ip}, result: ${result.responseStr()}`);
           }
         }
       }
 
       offset += payloadLen;
       if (shouldResetOffsetTo !== null) {
-        console.error(
+        logger.error(
           `offset reset from ${offset} to ${shouldResetOffsetTo} for ${ip}:${port}`
         );
         offset = shouldResetOffsetTo;
         if (shouldResetOffsetTo === 0) {
           const oldUid = uid;
           uid = Math.floor(Date.now() / 1000);
-          console.info(`${ip}:${port} uid changed from ${oldUid} to ${uid}`);
+          logger.info(`${ip}:${port} uid changed from ${oldUid} to ${uid}`);
         }
       }
 
@@ -310,7 +319,7 @@ export async function aioMm3Upgrade(
       }
     }
 
-    console.info(
+        logger.info(
       `upgrade finish ip: ${ip}:${port} ds: ${((Date.now() / 1000 - startTime).toFixed(1))}`
     );
 
@@ -319,7 +328,7 @@ export async function aioMm3Upgrade(
         progressReportFxn(precheckProgressRatio + upgradeProgressRatio, UpgradeStatus.Reboot);
       }
 
-      console.info(`begin reboot ip: ${ip}:${port} ds: ${((Date.now() / 1000 - startTime).toFixed(1))}`);
+        logger.info(`begin reboot ip: ${ip}:${port} ds: ${((Date.now() / 1000 - startTime).toFixed(1))}`);
 
       const startTs = Date.now() / 1000;
       const maxAllowedWhenRebootSeconds = 5 * 60;
@@ -335,9 +344,9 @@ export async function aioMm3Upgrade(
       const tsBeforeStartReboot = Date.now() / 1000;
 
       while (true) {
-        console.debug(`reboot ip: ${ip}:${port} ds: ${((Date.now() / 1000 - startTime).toFixed(1))}`);
+        logger.debug(`reboot ip: ${ip}:${port} ds: ${((Date.now() / 1000 - startTime).toFixed(1))}`);
 
-        const errorInfo: Array<Record<string, any>> = [];
+        const errorInfo: Array<Record<string, unknown>> = [];
         const rebootResult = await CGMinerAPI.aioRebootMm3(
           ip,
           rebootWhen,
@@ -355,7 +364,7 @@ export async function aioMm3Upgrade(
         }
 
         if (errorInfo.length > 0) {
-          console.debug(`reboot ${ip}:${port} error info: ${errorInfo}`);
+          logger.debug(`reboot ${ip}:${port} error info: ${errorInfo}`);
 
           if (
             rebootWhen === 0 &&
@@ -364,7 +373,7 @@ export async function aioMm3Upgrade(
           ) {
             const latestErrInfo = errorInfo[errorInfo.length - 1];
             if (latestErrInfo.timeout && latestErrInfo.connect_success) {
-              console.debug('timeout is acceptable for MM3 firmware right now');
+              logger.debug('timeout is acceptable for MM3 firmware right now');
               const maxAllowedRestartSeconds = 3 * 60;
               const [, tmpWhen] = await aioGetVerWhenAndUpapi(
                 ip,
@@ -391,14 +400,14 @@ export async function aioMm3Upgrade(
           rebootResult.statusMsg()?.includes('Wrong parameter') &&
           (rebootResult.when() || 0) < Math.max(prevWhen || 0, 30)
         ) {
-          console.debug(
+          logger.debug(
             `this reboot request failed with smaller when ${prevWhen}:${rebootResult.when()}, so reboot success`
           );
           rebootSuccess = true;
           break;
         }
 
-        console.info(
+        logger.info(
           `reboot ${ip}:${port} result: ${rebootResult ? rebootResult.debugStr() : null}`
         );
 
@@ -412,7 +421,7 @@ export async function aioMm3Upgrade(
         await new Promise((resolve) => setTimeout(resolve, 300));
 
         if (Date.now() / 1000 > startTs + maxAllowedRebootSeconds) {
-          console.info(
+          logger.info(
             `${ip}:${port} reboot timeout from ${startTs} to ${Date.now() / 1000}`
           );
           timeoutError = true;
@@ -422,10 +431,10 @@ export async function aioMm3Upgrade(
         }
       }
 
-      console.info(`end reboot ip: ${ip}:${port} ds: ${((Date.now() / 1000 - startTime).toFixed(1))}`);
+      logger.info(`end reboot ip: ${ip}:${port} ds: ${((Date.now() / 1000 - startTime).toFixed(1))}`);
 
       if (timeoutError) {
-        console.info(
+        logger.info(
           `upgrade result: failed. ip: ${ip}:${port} failed for reboot timeout`
         );
         upgradeResult = UpgradeResults.rebootTimeout;
@@ -453,34 +462,35 @@ export async function aioMm3Upgrade(
         newWhen !== null &&
         newWhen < (prevWhen || 0)
       ) {
-        console.debug(
+        logger.debug(
           `upgrade result: success. ip: ${ip}, prev ver: ${prevVer} prev when: ${prevWhen}, new ver: ${newVer} new when ${newWhen}`
         );
         upgradeResult = UpgradeResults.success;
         return [true, upgradeResult];
       } else {
-        console.debug(
+        logger.debug(
           `upgrade result: failed. ip: ${ip}, prev ver: ${prevVer} prev when: ${prevWhen}, target ver: ${version}, new ver: ${newVer} new when ${newWhen}`
         );
         upgradeResult = UpgradeResults.unexpectedFinalVer;
         return [false, upgradeResult];
       }
     } else {
-      console.info(`upgrade result: failed. ip: ${ip}:${port} failed for timeout`);
+        logger.info(`upgrade result: failed. ip: ${ip}:${port} failed for timeout`);
       upgradeResult = UpgradeResults.upgradeTimeout;
       return [false, upgradeResult];
     }
-  } catch (e: any) {
-    if (e.message === 'Cancelled') {
-      console.info(`upgrade result: cancelled. ip ${ip}:${port}`);
+  } catch (e: unknown) {
+    const error = e as Error;
+    if (error.message === 'Cancelled') {
+        logger.info(`upgrade result: cancelled. ip ${ip}:${port}`);
       upgradeResult = UpgradeResults.cancelled;
       return [false, upgradeResult];
     }
-    console.error(`upgrade result: failed. ip ${ip}:${port} upgrade exception: ${e}`);
+    logger.error(`upgrade result: failed. ip ${ip}:${port} upgrade exception: ${e instanceof Error ? e.message : String(e)}`);
     upgradeResult = UpgradeResults.unexpectedError;
     return [false, upgradeResult];
   } finally {
-    console.info(`upgrade end. ip ${ip}:${port}`);
+        logger.info(`upgrade end. ip ${ip}:${port}`);
     if (progressReportFxn) {
       progressReportFxn(upgradeResult, UpgradeStatus.Finish);
     }
@@ -510,10 +520,10 @@ async function aioMm3UpgradePrecheck(
       preCheckResult = false;
       preCheckErr = UpgradeResults.noPrevVer;
     } else {
-      console.warn(`ip ${ip}:${port} no prev ver`);
+      logger.warn(`ip ${ip}:${port} no prev ver`);
     }
   } else if (prevVer.startsWith(targetVersion)) {
-    console.warn(`same ver at ip ${ip}:${port}, no upgrade is needed`);
+    logger.warn(`same ver at ip ${ip}:${port}, no upgrade is needed`);
     preCheckResult = true;
     preCheckErr = UpgradeResults.alreadyUpgraded;
   }
@@ -524,7 +534,7 @@ async function aioMm3UpgradePrecheck(
     hwtype &&
     !supportedHwtypeList.includes(hwtype)
   ) {
-    console.warn(
+    logger.warn(
       `ver hwtype mismatch: cur ver ${prevVer}, cur hwtype ${hwtype}, target ver: ${targetVersion}, hwtype list ${supportedHwtypeList}`
     );
     preCheckResult = false;
@@ -537,7 +547,7 @@ async function aioMm3UpgradePrecheck(
     swtype &&
     !supportedSwtypeList.includes(swtype)
   ) {
-    console.warn(
+    logger.warn(
       `ver swtype mismatch: cur ver ${prevVer}, cur swtype ${swtype}, target ver: ${targetVersion}, swtype list ${supportedSwtypeList}`
     );
     preCheckResult = false;
@@ -592,7 +602,7 @@ async function aioGetVerWhenAndUpapi(
   }
 
   if (timeoutError) {
-    console.error(`ip: ${ip}:${port} failed for getting version timeout`);
+    logger.error(`ip: ${ip}:${port} failed for getting version timeout`);
   }
 
   return [prevVer, prevWhen, prevUpapiVer, hwtype, swtype];

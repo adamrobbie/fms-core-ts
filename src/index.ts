@@ -26,3 +26,5 @@ export * from './cg-miner-api';
 export * from './upgrade';
 export * from './aio-upgrade';
 export * from './aup-file';
+export * from './logger';
+export * from './constants';

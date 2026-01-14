@@ -32,6 +32,7 @@ import { Command } from 'commander';
 import { upgradeFirmware } from './upgrade';
 import { UpgradeResults } from './aio-upgrade';
 import { VERSION } from './index';
+import { logger, LogLevel } from './logger';
 
 const program = new Command();
 
@@ -42,7 +43,14 @@ program
 
 program
   .option('--log <level>', 'logging level', 'info')
-  .option('-l, --log-level <level>', 'logging level (debug, info, error)', 'info');
+  .option('-l, --log-level <level>', 'logging level (debug, info, warn, error)', 'info')
+  .hook('preAction', (thisCommand) => {
+    const logLevel = thisCommand.opts().logLevel || thisCommand.opts().log || 'info';
+    const level = LogLevel[logLevel.toUpperCase() as keyof typeof LogLevel];
+    if (level !== undefined) {
+      logger.setLevel(level);
+    }
+  });
 
 program
   .command('upgrade')
@@ -65,7 +73,7 @@ program
     try {
       [success, upgradeResult] = await upgradeFirmware(ip, port, file, timeout);
     } finally {
-      console.log(
+      logger.info(
         `upgrade ${ip}:${port} firmware to ${file} finish: ${
           success ? 'success' : 'failed'
         } with ${upgradeResult}`
@@ -85,7 +93,7 @@ if (require.main === module) {
   try {
     main();
   } catch (e: any) {
-    console.error(`fmsc main uncaught exception: ${e}`);
+    logger.error(`fmsc main uncaught exception: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);
   }
 }
