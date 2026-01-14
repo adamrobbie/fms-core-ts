@@ -1,0 +1,42 @@
+# Source TypeScript files (only dist/ should be published)
+src/
+scripts/
+tests/
+
+# Development files
+*.log
+.DS_Store
+.env
+.env.example
+
+# Test coverage
+coverage/
+*.lcov
+
+# Build artifacts
+*.js.map
+*.d.ts.map
+
+# Development tools
+.agents_local/
+tsconfig*.json
+jest.config.js
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python reference (keep for documentation, but could exclude if desired)
+# python-reference/

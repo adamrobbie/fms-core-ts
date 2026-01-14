@@ -50,10 +50,20 @@
   ],
   "author": "Canaan",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/Canaan-Creative/fms-core#readme",
+  "bugs": {
+    "url": "https://github.com/Canaan-Creative/fms-core/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Canaan-Creative/fms-core"
+    "url": "https://github.com/Canaan-Creative/fms-core.git"
   },
+  "files": [
+    "dist/**/*",
+    "LICENSE",
+    "README.md",
+    "python-reference/**/*"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
