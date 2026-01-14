@@ -100,6 +100,45 @@ export interface VersionResponse {
   [key: string]: unknown;
 }
 
+function redactCommandParameters(command: string, params: string): string {
+  const trimmed = params.length > 200 ? `${params.slice(0, 200)}…` : params;
+  const cmd = command.toLowerCase();
+
+  // Commands that may contain credentials or sensitive configuration
+  if (cmd.includes('addpool')) {
+    // Common format: url,user,pass (or similar). Redact user/pass.
+    const parts = trimmed.split(',');
+    if (parts.length >= 3) {
+      const safe = [parts[0], '<redacted-user>', '<redacted-pass>', ...parts.slice(3).map(() => '<redacted>')];
+      return safe.join(',');
+    }
+    return '<redacted>';
+  }
+
+  if (cmd.includes('config')) {
+    // Config can include pool credentials or other secrets; do not log.
+    return '<redacted>';
+  }
+
+  // Best-effort redaction for known key/value styles
+  return trimmed.replace(/(pass(word)?\s*[:=]\s*)([^,\s]+)/gi, '$1<redacted>');
+}
+
+function trimTrailingControlChars(s: string): string {
+  // Trim only *trailing* null bytes/control chars (common in CGMiner responses),
+  // while preserving the content of JSON string values.
+  return s.replace(/[\x00-\x1F\x7F]+$/g, '').trimEnd();
+}
+
+function sanitizeForJsonFallback(s: string): string {
+  // Fallback sanitizer: remove null bytes and *non-whitespace* control chars.
+  // Preserve \t (\x09), \n (\x0A), \r (\x0D) so JSON whitespace remains valid.
+  return s
+    .replace(/\0/g, '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+}
+
 export class CGMinerAPIResult {
   static readonly KEY_STATUS = 'STATUS';
   static readonly KEY_When = 'When';
@@ -127,12 +166,12 @@ export class CGMinerAPIResult {
     this.msg = msg;
 
     if (Buffer.isBuffer(response)) {
-      // Remove null bytes and other control characters that might break JSON parsing
-      this.response = response.toString('utf-8').replace(/\0/g, '').trim();
+      // Some miners null-terminate responses; trim only trailing control bytes.
+      this.response = trimTrailingControlChars(response.toString('utf-8'));
       this._responseDict = null;
     } else if (typeof response === 'string') {
-      // Remove null bytes and trim whitespace
-      this.response = response.replace(/\0/g, '').trim();
+      // Some miners null-terminate responses; trim only trailing control bytes.
+      this.response = trimTrailingControlChars(response);
       this._responseDict = null;
     } else {
       this.response = JSON.stringify(response);
@@ -169,43 +208,21 @@ export class CGMinerAPIResult {
     }
     if (this.result && this.response.length > 0) {
       try {
-        // Clean response before parsing: remove null bytes, control chars, and trim
-        // Some miners send null-terminated strings or have trailing control characters
-        const cleanedResponse = this.response
-          .replace(/\0/g, '') // Remove null bytes
-          .replace(/[\x00-\x1F\x7F]/g, '') // Remove other control characters except newlines/tabs
-          .trim();
-        
-        this._responseDict = JSON.parse(cleanedResponse) as CGMinerAPIResponse;
+        // Prefer a minimal cleanup: trim trailing control chars (common miner quirk).
+        const primary = trimTrailingControlChars(this.response);
+        try {
+          this._responseDict = JSON.parse(primary) as CGMinerAPIResponse;
+        } catch {
+          // Fallback: remove null bytes and non-whitespace control chars.
+          const fallback = sanitizeForJsonFallback(this.response);
+          this._responseDict = JSON.parse(fallback) as CGMinerAPIResponse;
+        }
       } catch (e: unknown) {
         const errorStr = e instanceof Error ? e.message : String(e);
-        let sidx = 0;
-        let eidx = 100;
-        const peekLen = 50;
-
-        const matched1 = errorStr.match(/.*\(\s*char\s+(\d+)\s*-\s*(\d+)\s*\).*/);
-        if (matched1) {
-          sidx = Math.min(
-            Math.max((str2int(matched1[1]) ?? 0) - peekLen, 0),
-            this.response.length
-          );
-          eidx = Math.min(
-            Math.max((str2int(matched1[2]) ?? 0) + peekLen, sidx),
-            this.response.length
-          );
-        } else {
-          const matched2 = errorStr.match(/.*\(\s*char\s+(\d+).*/);
-          if (matched2) {
-            sidx = Math.min(
-              Math.max((str2int(matched2[1]) ?? 0) - peekLen, 0),
-              this.response.length
-            );
-            eidx = Math.min(sidx + 2 * peekLen, this.response.length);
-          }
-        }
-        
-        logger.error(
-          `load api response failed. ${sidx}:${eidx} <<<${this.response.substring(sidx, eidx)}>>>`
+        // Avoid logging raw response content (may contain sensitive config).
+        logger.error(`load api response failed: ${errorStr}`);
+        logger.debug(
+          `api response parse failure (len=${this.response.length})`
         );
       }
     }
@@ -465,6 +482,7 @@ export async function aioRequestCgminerApiBySock(
 
   const totalStartTime = measurableTime();
   const params = parameters || '';
+  const safeParamsForLog = redactCommandParameters(command, params);
   let totalTimeoutErr = false;
   let tryTimes = 0;
   const bufferLen = 8 * 1024;
@@ -639,7 +657,7 @@ export async function aioRequestCgminerApiBySock(
 
       if (error.code !== 'ECONNREFUSED' && error.code !== 'ECONNRESET' && !isRefuseConn) {
         logger.error(
-          `[${apiRequestId}] [ip ${ip} port ${port}] exception when run command ${command} with parameter ${params.substring(0, 60)}. err: ${error}`
+          `[${apiRequestId}] [ip ${ip} port ${port}] exception when run command ${command} with parameter ${safeParamsForLog}. err: ${error}`
         );
       }
     }
@@ -655,16 +673,16 @@ export async function aioRequestCgminerApiBySock(
   if (success) {
     response = bufferList;
     logger.info(
-      `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: success. command ${command} with parameter ${params.substring(0, 60)}. dt: ${deltaTotalTime}`
+      `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: success. command ${command} with parameter ${safeParamsForLog}. dt: ${deltaTotalTime}`
     );
   } else if (totalTimeoutErr) {
     logger.info(
-      `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: total timeout. command ${command} with parameter ${params.substring(0, 60)}. dt: ${deltaTotalTime}`
+      `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: total timeout. command ${command} with parameter ${safeParamsForLog}. dt: ${deltaTotalTime}`
     );
     errMsgs.push(`Total timeout. limit ${totalTimeout}, real ${deltaTotalTime}`);
   } else {
     logger.info(
-      `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: other error. command ${command} with parameter ${params.substring(0, 60)}. dt: ${deltaTotalTime}. err: ${errMsgs[errMsgs.length - 1]?.substring(0, 100) || 'no err msg'}`
+      `[${apiRequestId}] [ip ${ip} port ${port}] [${tryTimes}/${retry}] api finish: other error. command ${command} with parameter ${safeParamsForLog}. dt: ${deltaTotalTime}. err: ${errMsgs[errMsgs.length - 1]?.substring(0, 100) || 'no err msg'}`
     );
   }
 
