@@ -26,7 +26,7 @@
  * ------
  *     $ fmsc -h
  * More information is available at:
- * - https://github.com/Canaan-Creative/fms-core
+ * - https://github.com/adamrobbie/fms-core-ts
  * Version:
  * --------
  * - fmsc v0.0.3
@@ -107,7 +107,7 @@ Examples:
   fmsc upgrade --ip 192.168.1.123 --file firmware.aup
   fmsc upgrade --ip 192.168.1.123 --file firmware.aup --port 4028 --timeout 720
 
-More information: https://github.com/Canaan-Creative/fms-core
+More information: https://github.com/adamrobbie/fms-core-ts
 `);
 }
 

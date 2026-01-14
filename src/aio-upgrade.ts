@@ -288,7 +288,10 @@ export async function aioMm3Upgrade(
               pageLen = Math.max(pageLen - 50, Math.floor(pageLen / 2), minPageLen);
             }
           } else {
-            logger.info(`cgminer api error: ip: ${ip}, result: ${result.responseStr()}`);
+            // Avoid logging raw responses here; it may contain sensitive configuration.
+            logger.info(
+              `cgminer api error: ip: ${ip}:${port}, status=${result.status()} code=${result.statusCode()} msg=${result.statusMsg() || ''}`
+            );
           }
         }
       }
@@ -407,8 +410,9 @@ export async function aioMm3Upgrade(
           break;
         }
 
+        // Avoid debugStr() here (it includes raw response). Log only the status summary.
         logger.info(
-          `reboot ${ip}:${port} result: ${rebootResult ? rebootResult.debugStr() : null}`
+          `reboot ${ip}:${port} result: status=${rebootResult?.status()} code=${rebootResult?.statusCode()} msg=${rebootResult?.statusMsg() || ''}`
         );
 
         if (progressReportFxn) {

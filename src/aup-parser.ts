@@ -117,19 +117,32 @@ export class AupHeader {
     return new AupHeader(magic, fmtVer, headerData);
   }
 
-  static fromIo(stream: fs.ReadStream): AupHeader {
-    // For simplicity, read all into buffer
+  /**
+   * Parse an AUP header from a readable stream.
+   *
+   * Note: This reads the entire stream into memory. That's fine for small AUP headers,
+   * but callers should avoid passing a full multi-MB firmware stream unless intended.
+   */
+  static async fromStream(stream: fs.ReadStream): Promise<AupHeader> {
     const chunks: Buffer[] = [];
-    stream.on('data', (chunk: string | Buffer) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    return new Promise<AupHeader>((resolve, reject) => {
+    return await new Promise<AupHeader>((resolve, reject) => {
+      stream.on('data', (chunk: string | Buffer) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
       stream.on('end', () => {
         const buffer = Buffer.concat(chunks);
         resolve(AupHeader.fromBytes(buffer));
       });
       stream.on('error', reject);
-    }) as any; // This is a simplified version - would need async handling for proper implementation
+    });
+  }
+
+  /**
+   * Backward-compatible alias for stream parsing.
+   * @deprecated Use AupHeader.fromStream(stream)
+   */
+  static async fromIo(stream: fs.ReadStream): Promise<AupHeader> {
+    return await AupHeader.fromStream(stream);
   }
 
   private static parseCommaSeparatedStrList(buffer: Buffer): CommaSeparatedStrList {

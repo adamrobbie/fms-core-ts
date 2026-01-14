@@ -48,15 +48,15 @@
     "typescript",
     "zero-dependencies"
   ],
-  "author": "Canaan",
+  "author": "Adam Robbie",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/Canaan-Creative/fms-core#readme",
+  "homepage": "https://github.com/adamrobbie/fms-core-ts#readme",
   "bugs": {
-    "url": "https://github.com/Canaan-Creative/fms-core/issues"
+    "url": "https://github.com/adamrobbie/fms-core-ts/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Canaan-Creative/fms-core.git"
+    "url": "https://github.com/adamrobbie/fms-core-ts.git"
   },
   "files": [
     "dist/**/*",

@@ -20,7 +20,7 @@
  * A comprehensive, zero-dependency TypeScript library for communicating with
  * CGMiner-compatible Bitcoin miners. Includes Avalon-specific extensions.
  * 
- * See https://github.com/Canaan-Creative/fms-core for more information
+ * See https://github.com/adamrobbie/fms-core-ts for more information
  * 
  * @example
  * ```typescript
