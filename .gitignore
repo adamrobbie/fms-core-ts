@@ -5,6 +5,10 @@ dist/
 .env
 .agents_local/
 
+# Test coverage reports
+coverage/
+*.lcov
+
 # TypeScript build artifacts
 # Compiled JavaScript files (should only be in dist/)
 src/**/*.js

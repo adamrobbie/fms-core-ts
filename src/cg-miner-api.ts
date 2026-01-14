@@ -780,6 +780,149 @@ export class CGMinerAPI {
     return await aioRequestCgminerApiBySock(ip, 'pools', '', { port, firstTimeout, retry });
   }
 
+  /**
+   * Add a new mining pool
+   * @param ip Miner IP address
+   * @param url Pool URL (e.g., "stratum+tcp://pool.example.com:3333")
+   * @param user Username/worker name
+   * @param password Pool password (optional)
+   * @param port Miner API port
+   * @param firstTimeout Initial timeout in seconds
+   * @param retry Number of retries
+   * @returns CGMinerAPIResult
+   */
+  static async addPool(
+    ip: string,
+    url: string,
+    user: string,
+    password: string = '',
+    port: number = kDefaultPort,
+    firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
+    retry: number = 0
+  ): Promise<CGMinerAPIResult> {
+    const parameter = `${url},${user},${password}`;
+    return await aioRequestCgminerApiBySock(ip, 'addpool', parameter, {
+      port,
+      firstTimeout,
+      retry,
+    });
+  }
+
+  /**
+   * Remove a pool by index
+   * @param ip Miner IP address
+   * @param poolIndex Pool index to remove (0-based)
+   * @param port Miner API port
+   * @param firstTimeout Initial timeout in seconds
+   * @param retry Number of retries
+   * @returns CGMinerAPIResult
+   */
+  static async removePool(
+    ip: string,
+    poolIndex: number,
+    port: number = kDefaultPort,
+    firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
+    retry: number = 0
+  ): Promise<CGMinerAPIResult> {
+    return await aioRequestCgminerApiBySock(ip, 'removepool', String(poolIndex), {
+      port,
+      firstTimeout,
+      retry,
+    });
+  }
+
+  /**
+   * Switch to a different pool
+   * @param ip Miner IP address
+   * @param poolIndex Pool index to switch to (0-based)
+   * @param port Miner API port
+   * @param firstTimeout Initial timeout in seconds
+   * @param retry Number of retries
+   * @returns CGMinerAPIResult
+   */
+  static async switchPool(
+    ip: string,
+    poolIndex: number,
+    port: number = kDefaultPort,
+    firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
+    retry: number = 0
+  ): Promise<CGMinerAPIResult> {
+    return await aioRequestCgminerApiBySock(ip, 'switchpool', String(poolIndex), {
+      port,
+      firstTimeout,
+      retry,
+    });
+  }
+
+  /**
+   * Enable a pool
+   * @param ip Miner IP address
+   * @param poolIndex Pool index to enable (0-based)
+   * @param port Miner API port
+   * @param firstTimeout Initial timeout in seconds
+   * @param retry Number of retries
+   * @returns CGMinerAPIResult
+   */
+  static async enablePool(
+    ip: string,
+    poolIndex: number,
+    port: number = kDefaultPort,
+    firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
+    retry: number = 0
+  ): Promise<CGMinerAPIResult> {
+    return await aioRequestCgminerApiBySock(ip, 'enablepool', String(poolIndex), {
+      port,
+      firstTimeout,
+      retry,
+    });
+  }
+
+  /**
+   * Disable a pool
+   * @param ip Miner IP address
+   * @param poolIndex Pool index to disable (0-based)
+   * @param port Miner API port
+   * @param firstTimeout Initial timeout in seconds
+   * @param retry Number of retries
+   * @returns CGMinerAPIResult
+   */
+  static async disablePool(
+    ip: string,
+    poolIndex: number,
+    port: number = kDefaultPort,
+    firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
+    retry: number = 0
+  ): Promise<CGMinerAPIResult> {
+    return await aioRequestCgminerApiBySock(ip, 'disablepool', String(poolIndex), {
+      port,
+      firstTimeout,
+      retry,
+    });
+  }
+
+  /**
+   * Get or set miner configuration
+   * @param ip Miner IP address
+   * @param config Optional configuration string to set
+   * @param port Miner API port
+   * @param firstTimeout Initial timeout in seconds
+   * @param retry Number of retries
+   * @returns CGMinerAPIResult
+   */
+  static async config(
+    ip: string,
+    config: string = '',
+    port: number = kDefaultPort,
+    firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
+    retry: number = 0
+  ): Promise<CGMinerAPIResult> {
+    return await aioRequestCgminerApiBySock(ip, 'config', config, {
+      port,
+      firstTimeout,
+      retry,
+    });
+  }
+
   static async toggleLED(
     ip: string,
     devId: string,

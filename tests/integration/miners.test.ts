@@ -116,10 +116,11 @@ describe('Miner Integration Tests', () => {
         const summary = result.summary();
         if (summary && Array.isArray(summary) && summary.length > 0) {
           const summaryData = summary[0];
-          console.log(`  Elapsed: ${summaryData.Elapsed || 'N/A'} seconds`);
-          console.log(`  Hash Rate: ${summaryData['GHS 5s'] || summaryData['GHS av'] || 'N/A'} GH/s`);
-          console.log(`  Accepted: ${summaryData.Accepted || 'N/A'}`);
-          console.log(`  Rejected: ${summaryData.Rejected || 'N/A'}`);
+          const s = summaryData as Record<string, unknown>;
+          console.log(`  Elapsed: ${s.Elapsed || 'N/A'} seconds`);
+          console.log(`  Hash Rate: ${s['GHS 5s'] || s['GHS av'] || 'N/A'} GH/s`);
+          console.log(`  Accepted: ${s.Accepted || 'N/A'}`);
+          console.log(`  Rejected: ${s.Rejected || 'N/A'}`);
         }
       });
 

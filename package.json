@@ -16,6 +16,7 @@
     "test:coverage": "jest --coverage",
     "test:integration": "INTEGRATION_TESTS=true jest tests/integration",
     "test:miners": "npm run build && ts-node scripts/test-miners.ts",
+    "test:pools": "npm run build && ts-node scripts/test-pool-commands.ts",
     "diagnose:miner": "npm run build && ts-node scripts/diagnose-miner.ts",
     "build:scripts": "tsc -p tsconfig.scripts.json",
     "prepublishOnly": "npm run clean && npm run build"
