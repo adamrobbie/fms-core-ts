@@ -17,7 +17,11 @@
  */
 
 /**
- * Query or control Avalon miners
+ * Query or control CGMiner-compatible Bitcoin miners
+ * 
+ * Works with any CGMiner-compatible miner (Avalon, Antminer, etc.)
+ * Includes Avalon-specific features like firmware upgrade.
+ * 
  * Usage:
  * ------
  *     $ fmsc -h
@@ -76,26 +80,30 @@ function parseArgs(args: string[]): ParsedArgs {
 
 function showHelp(): void {
   console.log(`
-Query or control Avalon miners
+Query or control CGMiner-compatible Bitcoin miners
+
+Works with any CGMiner-compatible miner (Avalon, Antminer, etc.)
+Includes Avalon-specific features like firmware upgrade.
 
 Usage:
   fmsc <command> [options]
 
 Commands:
-  upgrade              Upgrade firmware for one Avalon miner
+  upgrade              Upgrade firmware for Avalon miners (AUP format)
 
 Options:
   -h, --help          Show help
   -v, --version       Show version
   -l, --log-level     Logging level (debug, info, warn, error) [default: info]
 
-Upgrade Options:
-  --ip, -I <ip>       Avalon miner IP address (required)
-  --port, -P <port>   Avalon miner API port [default: 4028]
-  --file, -F <file>   Avalon miner firmware file path (required)
+Upgrade Options (Avalon-specific):
+  --ip, -I <ip>       Miner IP address (required)
+  --port, -P <port>   Miner API port [default: 4028]
+  --file, -F <file>   Firmware file path (.aup format, required)
   --timeout, -T <sec> Upgrade timeout in seconds [default: 720]
 
 Examples:
+  # Upgrade Avalon miner firmware
   fmsc upgrade --ip 192.168.1.123 --file firmware.aup
   fmsc upgrade --ip 192.168.1.123 --file firmware.aup --port 4028 --timeout 720
 

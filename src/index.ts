@@ -15,16 +15,35 @@
  */
 
 /**
- * FMS core functions
+ * fms-core - Modern TypeScript CGMiner API Library
+ * 
+ * A comprehensive, zero-dependency TypeScript library for communicating with
+ * CGMiner-compatible Bitcoin miners. Includes Avalon-specific extensions.
+ * 
  * See https://github.com/Canaan-Creative/fms-core for more information
+ * 
+ * @example
+ * ```typescript
+ * // General CGMiner API (works with any CGMiner-compatible miner)
+ * import { CGMinerAPI } from 'fms-core';
+ * const result = await CGMinerAPI.summary('192.168.1.123');
+ * 
+ * // Avalon-specific features
+ * import { upgradeFirmware } from 'fms-core/avalon';
+ * const [success] = await upgradeFirmware('192.168.1.123', 4028, 'firmware.aup');
+ * ```
  */
 
 export const VERSION = "0.0.3";
 
-export * from './utils';
+// Core CGMiner API - works with any CGMiner-compatible miner
 export * from './cg-miner-api';
+export * from './utils';
+export * from './logger';
+export * from './constants';
+
+// Avalon-specific features (also available via 'fms-core/avalon')
 export * from './upgrade';
 export * from './aio-upgrade';
 export * from './aup-file';
-export * from './logger';
-export * from './constants';
+export * from './aup-parser';

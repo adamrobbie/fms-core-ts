@@ -1,9 +1,21 @@
 {
   "name": "fms-core",
   "version": "0.0.3",
-  "description": "The core functions that Canaan FMS and other miner management systems needed to communicate with and control Avalon miners.",
+  "description": "Modern TypeScript CGMiner API library for Bitcoin miners. Zero dependencies, works with any CGMiner-compatible miner. Includes Avalon-specific extensions for firmware upgrade and MM3 features.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./avalon": {
+      "import": "./dist/avalon.js",
+      "require": "./dist/avalon.js",
+      "types": "./dist/avalon.d.ts"
+    }
+  },
   "bin": {
     "fmsc": "./dist/cli.js"
   },
@@ -22,11 +34,19 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
-    "avalon",
+    "cgminer",
+    "cgminer-api",
+    "bitcoin",
     "miner",
+    "mining",
+    "bitcoin-miner",
+    "miner-management",
+    "avalon",
     "canaan",
     "firmware",
-    "upgrade"
+    "upgrade",
+    "typescript",
+    "zero-dependencies"
   ],
   "author": "Canaan",
   "license": "Apache-2.0",
