@@ -2,8 +2,7 @@ name: Publish to npm
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: ["master"]
   workflow_dispatch: {}
 
 jobs:
@@ -31,7 +30,29 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Determine package version
+        id: pkg
+        run: |
+          echo "name=$(node -p \"require('./package.json').name\")" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+
+      - name: Check if version already exists on npm
+        id: exists
+        env:
+          PKG_NAME: ${{ steps.pkg.outputs.name }}
+          PKG_VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          set -e
+          if npm view "${PKG_NAME}@${PKG_VERSION}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "✅ ${PKG_NAME}@${PKG_VERSION} already exists on npm. Skipping publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "🚀 ${PKG_NAME}@${PKG_VERSION} not found on npm. Will publish."
+          fi
+
       - name: Publish
+        if: steps.exists.outputs.exists != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish
