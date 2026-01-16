@@ -22,7 +22,7 @@ import {
   UpgradeErrCode,
 } from './cg-miner-api';
 import { AUPFile } from './aup-file';
-import { str2int, str2float, firmwareDateStr, VirtualListAdder } from './utils';
+import { str2int, str2float, firmwareDateStr } from './utils';
 import { logger } from './logger';
 import {
   UPGRADE_UID_DEFAULT,
@@ -630,20 +630,9 @@ function hackAupHeaderWhenCrossAupHeaderVerUpgrade(
     if (useAupVer !== null && useAupVer !== aupFile.header().aupHeaderVer()) {
       const originalHeaderLen = aupFile.header().totalLen();
       const headerPayload = aupFile.generateAupHeaderPayload(useAupVer);
-      const adder = new VirtualListAdder(
-        Array.from(headerPayload),
-        undefined,
-        undefined,
-        Array.from(payload),
-        originalHeaderLen,
-        undefined
-      );
-      // Convert VirtualListAdder to Buffer by collecting all elements
-      const result: number[] = [];
-      for (let i = 0; i < adder.length; i++) {
-        result.push(adder.get(i));
-      }
-      return Buffer.from(result);
+      // Avoid `Array.from()` + VirtualListAdder + per-byte push (very expensive for large payloads).
+      // Result is: [newHeader] + [payload without original header prefix]
+      return Buffer.concat([headerPayload, payload.subarray(originalHeaderLen)]);
     }
   }
 

@@ -26,6 +26,13 @@ import {
   toBytes,
 } from './utils';
 import { logger } from './logger';
+import type {
+  CGMinerSummaryItem,
+  CGMinerPoolItem,
+  CGMinerDevItem,
+  CGMinerEDevItem,
+  CGMinerEStatsItem,
+} from './cgminer-types';
 import {
   DEFAULT_PORT,
   DEFAULT_FIRST_TIMEOUT,
@@ -319,12 +326,51 @@ export class CGMinerAPIResult {
     return this.successResponseDict('SUMMARY');
   }
 
+  summaryTyped(): CGMinerSummaryItem[] | null {
+    const data = this.summary();
+    return data ? (data as CGMinerSummaryItem[]) : null;
+  }
+
   devs(): unknown[] | null {
     return this.successResponseDict('DEVS');
   }
 
+  devsTyped(): CGMinerDevItem[] | null {
+    const data = this.devs();
+    return data ? (data as CGMinerDevItem[]) : null;
+  }
+
   pools(): unknown[] | null {
     return this.successResponseDict('POOLS');
+  }
+
+  poolsTyped(): CGMinerPoolItem[] | null {
+    const data = this.pools();
+    return data ? (data as CGMinerPoolItem[]) : null;
+  }
+
+  /**
+   * Extended devices payload returned by the `edevs` command.
+   */
+  edevs(): unknown[] | null {
+    return this.successResponseDict('EDEVS');
+  }
+
+  edevsTyped(): CGMinerEDevItem[] | null {
+    const data = this.edevs();
+    return data ? (data as CGMinerEDevItem[]) : null;
+  }
+
+  /**
+   * Extended stats payload returned by the `estats` command.
+   */
+  estats(): unknown[] | null {
+    return this.successResponseDict('ESTATS');
+  }
+
+  estatsTyped(): CGMinerEStatsItem[] | null {
+    const data = this.estats();
+    return data ? (data as CGMinerEStatsItem[]) : null;
   }
 
   debug(): unknown[] | null {

@@ -38,6 +38,8 @@ export const VERSION = "0.0.3";
 
 // Core CGMiner API - works with any CGMiner-compatible miner
 export * from './cg-miner-api';
+export * from './cgminer-types';
+export * from './client';
 export * from './utils';
 export * from './logger';
 export * from './constants';

@@ -25,11 +25,13 @@ npm install fms-core
 ### General CGMiner API (Any Miner)
 
 ```typescript
-import { CGMinerAPI } from 'fms-core';
+import { CGMinerAPI, CGMinerClient } from 'fms-core';
 
 // Works with any CGMiner-compatible miner (Avalon, Antminer, etc.)
 const ip = '192.168.1.123';
 const port = 4028;
+
+// Option A: static API (current style)
 
 // Get miner version
 const version = await CGMinerAPI.aioVersion(ip, port);
@@ -41,7 +43,7 @@ if (version.isRequestSuccess()) {
 // Get miner summary (hash rate, accepted/rejected shares, etc.)
 const summary = await CGMinerAPI.summary(ip, port);
 if (summary.isRequestSuccess()) {
-  const summaryData = summary.summary();
+  const summaryData = summary.summaryTyped() ?? summary.summary();
   console.log('Hash Rate:', summaryData?.[0]?.['GHS 5s']);
   console.log('Accepted:', summaryData?.[0]?.Accepted);
   console.log('Rejected:', summaryData?.[0]?.Rejected);
@@ -53,17 +55,22 @@ console.log('Pools:', pools.pools());
 
 // Get device information
 const devices = await CGMinerAPI.edevs(ip, port);
-console.log('Devices:', devices.edevs());
+console.log('Devices:', devices.edevsTyped() ?? devices.edevs());
 
 // Get extended statistics
 const stats = await CGMinerAPI.estats(ip, port);
-console.log('Stats:', stats.estats());
+console.log('Stats:', stats.estatsTyped() ?? stats.estats());
 
 // Pool management (add, remove, switch, enable, disable)
 await CGMinerAPI.addPool(ip, port, 'stratum+tcp://pool.example.com:3333', 'user', 'pass');
 await CGMinerAPI.switchPool(ip, port, 0); // Switch to pool 0
 await CGMinerAPI.enablePool(ip, port, 0);
 await CGMinerAPI.disablePool(ip, port, 1);
+
+// Option B: instance client (recommended when you talk to one miner repeatedly)
+const client = new CGMinerClient({ host: ip, port, firstTimeout: 2, retry: 0 });
+const poolsTyped = await client.poolsTyped();
+console.log('Pools:', poolsTyped);
 ```
 
 ### Avalon-Specific Features

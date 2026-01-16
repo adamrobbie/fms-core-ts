@@ -30,7 +30,7 @@ import { CGMinerAPI, CGMinerAPIResult, CGMinerStatus } from '../../src/cg-miner-
 // Load environment variables if .env file exists
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 try {
-  require('dotenv').config();
+  require('dotenv').config({ quiet: true });
 } catch (e) {
   // dotenv is optional - continue without it
 }
