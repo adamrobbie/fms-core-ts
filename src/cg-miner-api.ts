@@ -326,27 +326,49 @@ export class CGMinerAPIResult {
     return this.successResponseDict('SUMMARY');
   }
 
+  /**
+   * Returns summary data with TypeScript types applied.
+   * 
+   * Note: Types are best-effort and may not match all miner firmware variants.
+   * CGMiner payload schemas vary across vendors and firmware versions.
+   * Falls back to `summary()` if parsing fails.
+   */
   summaryTyped(): CGMinerSummaryItem[] | null {
     const data = this.summary();
-    return data ? (data as CGMinerSummaryItem[]) : null;
+    if (!data || !Array.isArray(data)) return null;
+    return data as CGMinerSummaryItem[];
   }
 
   devs(): unknown[] | null {
     return this.successResponseDict('DEVS');
   }
 
+  /**
+   * Returns device data with TypeScript types applied.
+   * 
+   * Note: Types are best-effort and may not match all miner firmware variants.
+   * CGMiner payload schemas vary across vendors and firmware versions.
+   */
   devsTyped(): CGMinerDevItem[] | null {
     const data = this.devs();
-    return data ? (data as CGMinerDevItem[]) : null;
+    if (!data || !Array.isArray(data)) return null;
+    return data as CGMinerDevItem[];
   }
 
   pools(): unknown[] | null {
     return this.successResponseDict('POOLS');
   }
 
+  /**
+   * Returns pool data with TypeScript types applied.
+   * 
+   * Note: Types are best-effort and may not match all miner firmware variants.
+   * CGMiner payload schemas vary across vendors and firmware versions.
+   */
   poolsTyped(): CGMinerPoolItem[] | null {
     const data = this.pools();
-    return data ? (data as CGMinerPoolItem[]) : null;
+    if (!data || !Array.isArray(data)) return null;
+    return data as CGMinerPoolItem[];
   }
 
   /**
@@ -356,9 +378,16 @@ export class CGMinerAPIResult {
     return this.successResponseDict('EDEVS');
   }
 
+  /**
+   * Returns extended device data with TypeScript types applied.
+   * 
+   * Note: Types are best-effort and may not match all miner firmware variants.
+   * CGMiner payload schemas vary across vendors and firmware versions.
+   */
   edevsTyped(): CGMinerEDevItem[] | null {
     const data = this.edevs();
-    return data ? (data as CGMinerEDevItem[]) : null;
+    if (!data || !Array.isArray(data)) return null;
+    return data as CGMinerEDevItem[];
   }
 
   /**
@@ -368,9 +397,16 @@ export class CGMinerAPIResult {
     return this.successResponseDict('ESTATS');
   }
 
+  /**
+   * Returns extended stats data with TypeScript types applied.
+   * 
+   * Note: Types are best-effort and may not match all miner firmware variants.
+   * CGMiner payload schemas vary across vendors and firmware versions.
+   */
   estatsTyped(): CGMinerEStatsItem[] | null {
     const data = this.estats();
-    return data ? (data as CGMinerEStatsItem[]) : null;
+    if (!data || !Array.isArray(data)) return null;
+    return data as CGMinerEStatsItem[];
   }
 
   debug(): unknown[] | null {
@@ -474,12 +510,19 @@ export class CGMinerAPIResult {
   }
 }
 
+export interface SocketErrorInfo {
+  timeout?: boolean;
+  connect_success?: boolean;
+  socket_error_no?: number;
+  [key: string]: unknown;
+}
+
 export interface RequestOptions {
   port?: number;
   firstTimeout?: number;
   retry?: number;
   useJsonCommand?: boolean;
-  errorInfo?: Array<Record<string, unknown>>;
+  errorInfo?: Array<SocketErrorInfo>;
   autoRetryIfRefusedConn?: boolean;
   totalTimeout?: number;
 }
@@ -601,6 +644,7 @@ export async function aioRequestCgminerApiBySock(
       let streamEnded = false;
       let maxIterations = 1000; // Safety limit to prevent infinite loops
       let iterationCount = 0;
+      let lastDataTime = Date.now();
 
       // Set up end-of-stream handler
       socket.once('end', () => {
@@ -611,7 +655,41 @@ export async function aioRequestCgminerApiBySock(
         streamEnded = true;
       });
 
-      while (!streamEnded && iterationCount < maxIterations) {
+      // Helper to check if we have complete JSON (basic heuristic: balanced braces or null terminator)
+      const hasCompleteResponse = (data: Buffer): boolean => {
+        const str = data.toString('utf-8');
+        // Check for null terminator (common in CGMiner responses)
+        if (str.includes('\0')) return true;
+        // Check for balanced JSON braces (simple heuristic)
+        let openBraces = 0;
+        let inString = false;
+        let escapeNext = false;
+        for (let i = 0; i < str.length; i++) {
+          const char = str[i];
+          if (escapeNext) {
+            escapeNext = false;
+            continue;
+          }
+          if (char === '\\') {
+            escapeNext = true;
+            continue;
+          }
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+          if (!inString) {
+            if (char === '{') openBraces++;
+            if (char === '}') {
+              openBraces--;
+              if (openBraces === 0 && i > 0) return true; // Complete JSON object
+            }
+          }
+        }
+        return false;
+      };
+
+      while (iterationCount < maxIterations) {
         iterationCount++;
         
         try {
@@ -642,15 +720,33 @@ export async function aioRequestCgminerApiBySock(
           }
           
           chunks.push(receivedData);
+          lastDataTime = Date.now();
+          
+          // Check if we have a complete response
+          const combined = Buffer.concat(chunks);
+          if (hasCompleteResponse(combined)) {
+            // Got complete response, break out
+            break;
+          }
 
           if (measurableTime() > totalStartTime + totalTimeout) {
             totalTimeoutErr = true;
             throw new Error('total timeout');
           }
         } catch (readError: unknown) {
-          // If it's a timeout or error, check if stream ended
+          // If stream ended, try to use what we have
           if (streamEnded) {
             break;
+          }
+          // If it's a read timeout and we have some data, wait a bit more for stream end
+          if (readError instanceof Error && readError.message === 'Read timeout') {
+            const timeSinceLastData = Date.now() - lastDataTime;
+            // If we haven't received data in a while and stream hasn't ended, break
+            if (timeSinceLastData > timeout * 1000 * 0.5) {
+              break;
+            }
+            // Otherwise continue waiting
+            continue;
           }
           throw readError;
         }
@@ -664,28 +760,28 @@ export async function aioRequestCgminerApiBySock(
       success = true;
       socket.destroy();
     } catch (e: unknown) {
-      const exceptErr: Record<string, unknown> = {};
+      const exceptErr: SocketErrorInfo = {};
       let isRefuseConn = false;
-      const error = e as NodeJS.ErrnoException;
+      const error = e instanceof Error && 'code' in e ? (e as NodeJS.ErrnoException) : null;
 
       if (errorInfo) {
         errorInfo.push(exceptErr);
       }
 
-      if (error.message?.includes('timeout')) {
-        exceptErr['timeout'] = true;
-        exceptErr['connect_success'] = connectSuccess;
+      if (error && error.message?.includes('timeout')) {
+        exceptErr.timeout = true;
+        exceptErr.connect_success = connectSuccess;
       }
 
-      if (error.code === 'ECONNREFUSED') {
-        exceptErr['socket_error_no'] = error.errno;
+      if (error && error.code === 'ECONNREFUSED') {
+        exceptErr.socket_error_no = error.errno;
         isRefuseConn = true;
         if (autoRetryIfRefusedConn) {
           unlimitedRetryCount += 1;
           if (
             errorInfo &&
             errorInfo.length >= 2 &&
-            (errorInfo[errorInfo.length - 2] as Record<string, unknown>)?.socket_error_no === error.errno
+            errorInfo[errorInfo.length - 2]?.socket_error_no === error.errno
           ) {
             errorInfo.pop();
           }
@@ -693,15 +789,15 @@ export async function aioRequestCgminerApiBySock(
         }
       }
 
-      if (error.code === 'ECONNRESET') {
+      if (error && error.code === 'ECONNRESET') {
         unlimitedRetryCount += 1;
       }
 
-      const errorName = error.constructor?.name || 'Error';
-      errMsgs.push(`${errorName}: ${error.message || String(e)}`);
+      const errorName = error?.constructor?.name || 'Error';
+      errMsgs.push(`${errorName}: ${error?.message || String(e)}`);
       bufferList = Buffer.alloc(0);
 
-      if (error.code !== 'ECONNREFUSED' && error.code !== 'ECONNRESET' && !isRefuseConn) {
+      if (error && error.code !== 'ECONNREFUSED' && error.code !== 'ECONNRESET' && !isRefuseConn) {
         logger.error(
           `[${apiRequestId}] [ip ${ip} port ${port}] exception when run command ${command} with parameter ${safeParamsForLog}. err: ${error}`
         );
@@ -744,7 +840,7 @@ function canceledResult(): CGMinerAPIResult {
 }
 
 export class CGMinerAPI {
-  static defaultFirstTimeout = 5;
+  static defaultFirstTimeout = 2; // Match aioRequestCgminerApiBySock default
 
   static async multipleReportCommands(
     ip: string,
@@ -815,6 +911,15 @@ export class CGMinerAPI {
     retry: number = 0
   ): Promise<CGMinerAPIResult> {
     return await aioRequestCgminerApiBySock(ip, 'estats', '', { port, firstTimeout, retry });
+  }
+
+  static async devs(
+    ip: string,
+    port: number = kDefaultPort,
+    firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
+    retry: number = 0
+  ): Promise<CGMinerAPIResult> {
+    return await aioRequestCgminerApiBySock(ip, 'devs', '', { port, firstTimeout, retry });
   }
 
   static async edevs(
@@ -1024,7 +1129,7 @@ export class CGMinerAPI {
     port: number = kDefaultPort,
     firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
     retry: number = 0,
-    errorInfo?: Array<Record<string, any>>
+    errorInfo?: Array<SocketErrorInfo>
   ): Promise<boolean | null> {
     const response = await aioRequestCgminerApiBySock(ip, 'ascset', '0,led,0-255', {
       port,
@@ -1103,7 +1208,7 @@ export class CGMinerAPI {
     port: number = kDefaultPort,
     firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
     retry: number = 0,
-    errorInfo?: Array<Record<string, any>>
+    errorInfo?: Array<SocketErrorInfo>
   ): Promise<CGMinerAPIResult> {
     return await aioRequestCgminerApiBySock(ip, 'ascset', `0,reboot,${lastWhen}`, {
       port,
@@ -1119,7 +1224,7 @@ export class CGMinerAPI {
     port: number = kDefaultPort,
     firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
     retry: number = 0,
-    errorInfo?: Array<Record<string, any>>
+    errorInfo?: Array<SocketErrorInfo>
   ): Promise<CGMinerAPIResult> {
     return await aioRequestCgminerApiBySock(ip, 'ascset', `0,reboot,${lastWhen}`, {
       port,
@@ -1135,7 +1240,7 @@ export class CGMinerAPI {
     port: number = kDefaultPort,
     firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
     retry: number = 0,
-    errorInfo?: Array<Record<string, any>>
+    errorInfo?: Array<SocketErrorInfo>
   ): Promise<CGMinerAPIResult> {
     return await aioRequestCgminerApiBySock(ip, 'ascset', `0,workmode,${workmode}`, {
       port,
@@ -1150,7 +1255,7 @@ export class CGMinerAPI {
     port: number = kDefaultPort,
     firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
     retry: number = 0,
-    errorInfo?: Array<Record<string, any>>
+    errorInfo?: Array<SocketErrorInfo>
   ): Promise<CGMinerAPIResult> {
     return await aioRequestCgminerApiBySock(ip, 'version', '', { port, firstTimeout, retry, errorInfo });
   }
@@ -1160,7 +1265,7 @@ export class CGMinerAPI {
     port: number = kDefaultPort,
     firstTimeout: number = CGMinerAPI.defaultFirstTimeout,
     retry: number = 0,
-    errorInfo?: Array<Record<string, any>>
+    errorInfo?: Array<SocketErrorInfo>
   ): Promise<CGMinerAPIResult> {
     return await aioRequestCgminerApiBySock(ip, 'version', '', {
       port,
