@@ -36,6 +36,7 @@ import { upgradeFirmware } from './upgrade';
 import { UpgradeResults } from './aio-upgrade';
 import { VERSION } from './index';
 import { logger, LogLevel } from './logger';
+import { validateIP, validatePort, safeFilenameForLog } from './utils';
 
 interface ParsedArgs {
   command?: string;
@@ -158,10 +159,32 @@ export function main(): void {
       process.exit(1);
     }
 
-    const ip = parsed.ip;
-    const port = parseInt(parsed.port || '4028', 10);
-    const file = parsed.file;
-    const timeout = parseInt(parsed.timeout || '720', 10);
+    const ip = parsed.ip!;
+    
+    // Validate IP address
+    if (!validateIP(ip)) {
+      console.error(`Error: Invalid IP address format: ${ip}`);
+      console.error('Expected format: xxx.xxx.xxx.xxx (e.g., 192.168.1.100)');
+      process.exit(1);
+    }
+    
+    // Validate and parse port
+    const portRaw = parseInt(parsed.port || '4028', 10);
+    if (!validatePort(portRaw)) {
+      console.error(`Error: Invalid port number: ${portRaw}`);
+      console.error('Port must be between 1 and 65535');
+      process.exit(1);
+    }
+    const port = portRaw;
+    
+    const file = parsed.file!;
+    
+    // Validate and parse timeout
+    const timeoutRaw = parseInt(parsed.timeout || '720', 10);
+    const timeout = Math.max(1, Math.min(timeoutRaw, 3600)); // Clamp between 1 and 3600 seconds
+    if (timeoutRaw !== timeout) {
+      console.error(`Warning: Timeout clamped to ${timeout} seconds (was ${timeoutRaw})`);
+    }
 
     (async () => {
       let success = false;
@@ -170,8 +193,10 @@ export function main(): void {
       try {
         [success, upgradeResult] = await upgradeFirmware(ip, port, file, timeout);
       } finally {
+        // Sanitize file path in logs (only show filename, not full path)
+        const safeFile = safeFilenameForLog(file);
         logger.info(
-          `upgrade ${ip}:${port} firmware to ${file} finish: ${
+          `upgrade ${ip}:${port} firmware to ${safeFile} finish: ${
             success ? 'success' : 'failed'
           } with ${upgradeResult}`
         );

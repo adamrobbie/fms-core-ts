@@ -48,3 +48,4 @@ export const UPGRADE_TIMEOUT_DEFAULT = 12 * 60; // 12 minutes
  * Error codes
  */
 export const ERR_CODE_CANCELLED = 99999;
+export const ERR_CODE_INVALID_INPUT = 99998;

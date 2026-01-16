@@ -16,7 +16,7 @@
 
 import * as fs from 'fs';
 import { AupHeader } from './aup-parser';
-import { toStr, toBytes, VirtualListAdder } from './utils';
+import { toStr, toBytes, VirtualListAdder, validateFilePath } from './utils';
 import { logger } from './logger';
 
 // Simple CRC32 implementation
@@ -193,8 +193,9 @@ export class AUPFile {
   headerInfo: AUPHeaderInfo;
 
   constructor(filePath: string) {
-    this.filePath = filePath;
-    this.rawPayload = fs.readFileSync(filePath);
+    // Validate and resolve file path to prevent path traversal attacks
+    this.filePath = validateFilePath(filePath);
+    this.rawPayload = fs.readFileSync(this.filePath);
     this.headerInfo = new AUPHeaderInfo(this.rawPayload);
   }
 

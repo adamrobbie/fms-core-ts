@@ -19,6 +19,10 @@ import {
   measurableTime,
   nowExactStr,
   randomStrOnlyWithAlnum,
+  randomStrOnlyWithAlnumSecure,
+  secureRandomInt,
+  validateIP,
+  validatePort,
   str2int,
   str2float,
   parseCgminerBracketFormatStrIntoJson,
@@ -50,6 +54,7 @@ import {
   UPGRADE_RESERVED_BYTES_2,
   UPGRADE_VERSION_MAX_LENGTH,
   ERR_CODE_CANCELLED,
+  ERR_CODE_INVALID_INPUT,
 } from './constants';
 
 export const kDefaultPort = DEFAULT_PORT;
@@ -548,12 +553,28 @@ export function requestCgminerApiBySock(
 }
 
 // Simplified synchronous version - for full async version, see async implementation below
+// Maximum response size to prevent DoS (10MB)
+const MAX_RESPONSE_SIZE = 10 * 1024 * 1024;
+// Maximum unlimited retries to prevent resource exhaustion
+const MAX_UNLIMITED_RETRIES = 10;
+// Maximum parameter length to prevent DoS
+const MAX_PARAM_LENGTH = 8192; // 8KB
+
 export async function aioRequestCgminerApiBySock(
   ip: string,
   command: string,
   parameters: string | null,
   options: RequestOptions & { cancelEvent?: AbortSignal } = {}
 ): Promise<CGMinerAPIResult> {
+  // Validate IP address
+  if (!validateIP(ip)) {
+    return CGMinerAPIResult.errorResult(
+      Date.now() / 1000,
+      `Invalid IP address format: ${ip}`,
+      ERR_CODE_INVALID_INPUT
+    );
+  }
+
   const {
     port = kDefaultPort,
     firstTimeout = 2,
@@ -565,12 +586,30 @@ export async function aioRequestCgminerApiBySock(
     cancelEvent,
   } = options;
 
+  // Validate port number
+  if (!validatePort(port)) {
+    return CGMinerAPIResult.errorResult(
+      Date.now() / 1000,
+      `Invalid port number: ${port} (must be 1-65535)`,
+      ERR_CODE_INVALID_INPUT
+    );
+  }
+
+  // Validate parameter length
+  const params = parameters || '';
+  if (params.length > MAX_PARAM_LENGTH) {
+    return CGMinerAPIResult.errorResult(
+      Date.now() / 1000,
+      `Parameter too long: ${params.length} bytes (max ${MAX_PARAM_LENGTH})`,
+      ERR_CODE_INVALID_INPUT
+    );
+  }
+
   if (cancelEvent?.aborted) {
     return canceledResult();
   }
 
   const totalStartTime = measurableTime();
-  const params = parameters || '';
   const safeParamsForLog = redactCommandParameters(command, params);
   let totalTimeoutErr = false;
   let tryTimes = 0;
@@ -580,11 +619,17 @@ export async function aioRequestCgminerApiBySock(
   let success = false;
   let scantime = Date.now() / 1000;
   let unlimitedRetryCount = 0;
-  const apiRequestId = randomStrOnlyWithAlnum();
+  const apiRequestId = randomStrOnlyWithAlnumSecure();
 
   while (!success && !totalTimeoutErr && tryTimes <= retry + unlimitedRetryCount) {
     if (cancelEvent?.aborted) {
       return canceledResult();
+    }
+
+    // Enforce maximum unlimited retry limit
+    if (unlimitedRetryCount >= MAX_UNLIMITED_RETRIES) {
+      errMsgs.push(`Maximum retry limit exceeded (${MAX_UNLIMITED_RETRIES})`);
+      break;
     }
 
     if (measurableTime() > totalStartTime + totalTimeout) {
@@ -645,6 +690,7 @@ export async function aioRequestCgminerApiBySock(
       let maxIterations = 1000; // Safety limit to prevent infinite loops
       let iterationCount = 0;
       let lastDataTime = Date.now();
+      let totalResponseSize = 0; // Track total response size to prevent DoS
 
       // Set up end-of-stream handler
       socket.once('end', () => {
@@ -717,6 +763,13 @@ export async function aioRequestCgminerApiBySock(
           if (receivedData.length === 0) {
             streamEnded = true;
             break;
+          }
+          
+          // Enforce maximum response size to prevent DoS
+          totalResponseSize += receivedData.length;
+          if (totalResponseSize > MAX_RESPONSE_SIZE) {
+            socket.destroy();
+            throw new Error(`Response too large: ${totalResponseSize} bytes (max ${MAX_RESPONSE_SIZE})`);
           }
           
           chunks.push(receivedData);
@@ -1355,7 +1408,8 @@ export class CGMinerAPI {
     param.push(longToBytes(byte0, 1, endianness));
     const headerLen = 30; // header bytes count
     param.push(longToBytes(headerLen, 1, endianness));
-    const cmdId = Math.floor(Math.random() * (65536 / 2)) + 1; // 2 bytes
+    // Use cryptographically secure random for command ID
+    const cmdId = secureRandomInt(1, UPGRADE_CMD_ID_MAX + 1); // 2 bytes
     param.push(longToBytes(cmdId, 2, endianness));
     const subCmd = 0x0; // always 0
     param.push(longToBytes(subCmd, 1, endianness));

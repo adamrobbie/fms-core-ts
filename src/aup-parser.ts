@@ -15,7 +15,7 @@
  */
 
 import * as fs from 'fs';
-import { toStr } from './utils';
+import { toStr, validateFilePath } from './utils';
 
 export interface AupHeaderData {
   payloadLen?: number;
@@ -48,7 +48,9 @@ export class AupHeader {
   }
 
   static fromFile(filePath: string): AupHeader {
-    const buffer = fs.readFileSync(filePath);
+    // Validate and resolve file path to prevent path traversal attacks
+    const validatedPath = validateFilePath(filePath);
+    const buffer = fs.readFileSync(validatedPath);
     return AupHeader.fromBytes(buffer);
   }
 

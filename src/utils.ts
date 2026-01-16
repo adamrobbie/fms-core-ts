@@ -18,6 +18,127 @@
  * Utility functions for FMS core
  */
 
+import * as crypto from 'crypto';
+import * as path from 'path';
+import * as fs from 'fs';
+
+/**
+ * Validates an IPv4 address format
+ * @param ip IP address string to validate
+ * @returns true if valid IPv4 format, false otherwise
+ */
+export function validateIP(ip: string): boolean {
+  if (!ip || typeof ip !== 'string') return false;
+  
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (!ipv4Regex.test(ip)) return false;
+  
+  const parts = ip.split('.');
+  if (parts.length !== 4) return false;
+  
+  return parts.every(p => {
+    const n = parseInt(p, 10);
+    return !isNaN(n) && n >= 0 && n <= 255;
+  });
+}
+
+/**
+ * Validates a port number
+ * @param port Port number to validate
+ * @returns true if valid port (1-65535), false otherwise
+ */
+export function validatePort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
+}
+
+/**
+ * Validates and resolves a file path, preventing path traversal attacks
+ * @param filePath File path to validate
+ * @param baseDir Base directory (defaults to current working directory)
+ * @returns Resolved absolute path
+ * @throws Error if path traversal detected or path is invalid
+ */
+export function validateFilePath(filePath: string, baseDir?: string): string {
+  if (!filePath || typeof filePath !== 'string') {
+    throw new Error('Invalid file path');
+  }
+  
+  const base = path.resolve(baseDir || process.cwd());
+  const resolved = path.resolve(base, filePath);
+  
+  // Check for path traversal
+  if (!resolved.startsWith(base)) {
+    throw new Error('Path traversal detected: path outside base directory');
+  }
+  
+  // Check if file exists and is not a symlink
+  try {
+    const stats = fs.lstatSync(resolved);
+    if (stats.isSymbolicLink()) {
+      throw new Error('Symlinks not allowed for security reasons');
+    }
+    if (!stats.isFile()) {
+      throw new Error('Path does not point to a file');
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      // File doesn't exist yet - that's okay for some operations
+      // But still validate the directory path
+      const dirPath = path.dirname(resolved);
+      try {
+        const dirStats = fs.lstatSync(dirPath);
+        if (dirStats.isSymbolicLink()) {
+          throw new Error('Symlinks not allowed for security reasons');
+        }
+      } catch (dirErr) {
+        throw new Error(`Invalid directory path: ${(dirErr as Error).message}`);
+      }
+    } else {
+      throw err;
+    }
+  }
+  
+  return resolved;
+}
+
+/**
+ * Gets a safe filename for logging (basename only, no path)
+ * @param filePath Full file path
+ * @returns Safe filename for logging
+ */
+export function safeFilenameForLog(filePath: string): string {
+  if (!filePath) return '<unknown>';
+  return path.basename(filePath);
+}
+
+/**
+ * Generates a cryptographically secure random string using alphanumeric characters
+ * @param n Length of the random string (default: 6)
+ * @returns Random alphanumeric string
+ */
+export function randomStrOnlyWithAlnumSecure(n: number = 6): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  const randomBytes = crypto.randomBytes(n);
+  for (let i = 0; i < n; i++) {
+    result += chars[randomBytes[i] % chars.length];
+  }
+  return result;
+}
+
+/**
+ * Generates a cryptographically secure random integer in a range
+ * @param min Minimum value (inclusive)
+ * @param max Maximum value (exclusive)
+ * @returns Random integer in range [min, max)
+ */
+export function secureRandomInt(min: number, max: number): number {
+  const range = max - min;
+  const randomBytes = crypto.randomBytes(4);
+  const randomValue = randomBytes.readUInt32BE(0);
+  return min + (randomValue % range);
+}
+
 export function firmwareDateStr(ver: string | null | undefined): string {
   if (!ver) return ver || '';
   const parts = ver.trim().split('-');
@@ -115,6 +236,10 @@ export function parseCgminerBracketFormatStrIntoJson(bs: string): Record<string,
   return { ...r, ...newValues };
 }
 
+/**
+ * @deprecated Use randomStrOnlyWithAlnumSecure() for cryptographically secure random strings
+ * This function uses Math.random() which is not cryptographically secure
+ */
 export function randomStrOnlyWithAlnum(n: number = 6): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
