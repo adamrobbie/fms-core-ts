@@ -61,8 +61,7 @@
   "files": [
     "dist/**/*",
     "LICENSE",
-    "README.md",
-    "python-reference/**/*"
+    "README.md"
   ],
   "engines": {
     "node": ">=18.0.0"

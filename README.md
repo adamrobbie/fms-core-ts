@@ -217,4 +217,4 @@ Apache License 2.0
 
 - Original Python version: https://github.com/Canaan-Creative/fms-core
 - This TypeScript port: https://github.com/adamrobbie/fms-core-ts
-- Python reference implementation: See `python-reference/` directory
+- Python reference implementation: https://github.com/Canaan-Creative/fms-core (see `python-reference/` in that repo)
