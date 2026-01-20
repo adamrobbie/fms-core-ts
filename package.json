@@ -1,6 +1,6 @@
 {
   "name": "fms-core",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Modern TypeScript CGMiner API library for Bitcoin miners. Zero dependencies, works with any CGMiner-compatible miner. Includes Avalon-specific extensions for firmware upgrade and MM3 features.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
