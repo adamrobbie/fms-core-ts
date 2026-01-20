@@ -1,5 +1,3 @@
-#!/usr/bin/env npx ts-node
-
 /**
  * Hashrate Monitor Example
  * 
@@ -29,10 +27,31 @@ process.on('SIGINT', () => {
   running = false;
 });
 
-function formatHashrate(ghs: number | undefined): string {
-  if (ghs === undefined || ghs === null) return 'N/A';
-  if (ghs >= 1000) return `${(ghs / 1000).toFixed(2)} TH/s`;
-  return `${ghs.toFixed(2)} GH/s`;
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+function readFirstNumericField(
+  obj: Record<string, unknown>,
+  keys: string[]
+): { value?: number; key?: string } {
+  for (const k of keys) {
+    const v = toNumber(obj[k]);
+    if (v !== undefined) return { value: v, key: k };
+  }
+  return {};
+}
+
+function formatHashrate(value: number | undefined, unit: string): string {
+  if (value === undefined) return 'N/A';
+  // Best-effort: if already in GH/s we can scale to TH/s for readability
+  if (unit === 'GH/s' && value >= 1000) return `${(value / 1000).toFixed(2)} TH/s`;
+  return `${value.toFixed(2)} ${unit}`;
 }
 
 function formatUptime(seconds: number | undefined): string {
@@ -51,13 +70,18 @@ async function poll(): Promise<void> {
     if (result.isRequestSuccess()) {
       const summary = result.summaryTyped();
       if (summary && summary.length > 0) {
-        const s = summary[0];
-        const hashrate5s = s['GHS 5s'];
-        const hashrateAvg = s['GHS av'];
-        const accepted = s.Accepted ?? 0;
-        const rejected = s.Rejected ?? 0;
-        const hwErrors = s['Hardware Errors'] ?? 0;
-        const uptime = s.Elapsed;
+        const s = summary[0] as unknown as Record<string, unknown>;
+        const hashrate5s = readFirstNumericField(s, ['GHS 5s', 'MHS 5s', 'KHS 5s']);
+        const hashrateAvg = readFirstNumericField(s, ['GHS av', 'MHS av', 'KHS av']);
+        const unit5s =
+          hashrate5s.key?.startsWith('GHS') ? 'GH/s' : hashrate5s.key?.startsWith('MHS') ? 'MH/s' : hashrate5s.key?.startsWith('KHS') ? 'KH/s' : 'H/s';
+        const unitAvg =
+          hashrateAvg.key?.startsWith('GHS') ? 'GH/s' : hashrateAvg.key?.startsWith('MHS') ? 'MH/s' : hashrateAvg.key?.startsWith('KHS') ? 'KH/s' : 'H/s';
+
+        const accepted = toNumber(s['Accepted']) ?? 0;
+        const rejected = toNumber(s['Rejected']) ?? 0;
+        const hwErrors = toNumber(s['Hardware Errors']) ?? 0;
+        const uptime = toNumber(s['Elapsed']);
         
         // Calculate rejection rate
         const total = accepted + rejected;
@@ -65,7 +89,7 @@ async function poll(): Promise<void> {
         
         console.log(
           `[${timestamp}] ` +
-          `Hash: ${formatHashrate(hashrate5s)} (avg: ${formatHashrate(hashrateAvg)}) | ` +
+          `Hash: ${formatHashrate(hashrate5s.value, unit5s)} (avg: ${formatHashrate(hashrateAvg.value, unitAvg)}) | ` +
           `Shares: ${accepted}/${rejected} (${rejectRate}% rej) | ` +
           `HW Err: ${hwErrors} | ` +
           `Uptime: ${formatUptime(uptime)}`

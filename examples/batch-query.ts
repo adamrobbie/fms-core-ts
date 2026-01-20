@@ -1,5 +1,3 @@
-#!/usr/bin/env npx ts-node
-
 /**
  * Batch Query Example
  * 
@@ -25,11 +23,50 @@ interface MinerResult {
   ip: string;
   status: 'online' | 'offline' | 'error';
   hashrate?: number;
+  hashrateUnit?: 'GH/s' | 'MH/s' | 'KH/s' | 'H/s';
+  hashrateGh?: number;
   accepted?: number;
   rejected?: number;
   temperature?: number;
   uptime?: number;
   error?: string;
+}
+
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+function readFirstNumericField(
+  obj: Record<string, unknown>,
+  keys: string[]
+): { value?: number; key?: string } {
+  for (const k of keys) {
+    const v = toNumber(obj[k]);
+    if (v !== undefined) return { value: v, key: k };
+  }
+  return {};
+}
+
+function unitFromKey(key: string | undefined): MinerResult['hashrateUnit'] {
+  if (!key) return 'H/s';
+  if (key.startsWith('GHS')) return 'GH/s';
+  if (key.startsWith('MHS')) return 'MH/s';
+  if (key.startsWith('KHS')) return 'KH/s';
+  return 'H/s';
+}
+
+function normalizeToGh(value: number | undefined, unit: MinerResult['hashrateUnit']): number | undefined {
+  if (value === undefined) return undefined;
+  if (unit === 'GH/s') return value;
+  if (unit === 'MH/s') return value / 1000;
+  if (unit === 'KH/s') return value / 1_000_000;
+  if (unit === 'H/s') return value / 1_000_000_000;
+  return undefined;
 }
 
 function getMiners(): Array<{ name: string; ip: string; port: number }> {
@@ -62,11 +99,14 @@ async function queryMiner(miner: { name: string; ip: string; port: number }): Pr
       result.status = 'online';
       const summary = summaryResult.summaryTyped();
       if (summary && summary.length > 0) {
-        const s = summary[0];
-        result.hashrate = s['GHS 5s'] ?? s['GHS av'];
-        result.accepted = s.Accepted;
-        result.rejected = s.Rejected;
-        result.uptime = s.Elapsed;
+        const s = summary[0] as unknown as Record<string, unknown>;
+        const rate = readFirstNumericField(s, ['GHS 5s', 'GHS av', 'MHS 5s', 'MHS av', 'KHS 5s', 'KHS av']);
+        result.hashrate = rate.value;
+        result.hashrateUnit = unitFromKey(rate.key);
+        result.hashrateGh = normalizeToGh(result.hashrate, result.hashrateUnit);
+        result.accepted = toNumber(s.Accepted);
+        result.rejected = toNumber(s.Rejected);
+        result.uptime = toNumber(s.Elapsed);
       }
     } else {
       result.status = 'error';
@@ -94,10 +134,10 @@ async function queryMiner(miner: { name: string; ip: string; port: number }): Pr
   return result;
 }
 
-function formatHashrate(ghs: number | undefined): string {
-  if (ghs === undefined) return '-';
-  if (ghs >= 1000) return `${(ghs / 1000).toFixed(1)} TH/s`;
-  return `${ghs.toFixed(1)} GH/s`;
+function formatHashrateWithUnit(value: number | undefined, unit: MinerResult['hashrateUnit']): string {
+  if (value === undefined) return '-';
+  if (unit === 'GH/s' && value >= 1000) return `${(value / 1000).toFixed(1)} TH/s`;
+  return `${value.toFixed(1)} ${unit}`;
 }
 
 function formatUptime(seconds: number | undefined): string {
@@ -116,14 +156,14 @@ function printTable(results: MinerResult[]): void {
   console.log(header);
   console.log(separator);
 
-  let totalHashrate = 0;
+  let totalHashrateGh = 0;
   let totalAccepted = 0;
   let totalRejected = 0;
   let onlineCount = 0;
 
   for (const r of results) {
     const status = r.status === 'online' ? '🟢 OK' : r.status === 'offline' ? '🔴 OFF' : '⚠️ ERR';
-    const hashrate = formatHashrate(r.hashrate);
+    const hashrate = formatHashrateWithUnit(r.hashrate, r.hashrateUnit ?? 'GH/s');
     const temp = r.temperature !== undefined ? `${r.temperature}°C` : '-';
     const uptime = formatUptime(r.uptime);
 
@@ -133,7 +173,7 @@ function printTable(results: MinerResult[]): void {
 
     if (r.status === 'online') {
       onlineCount++;
-      totalHashrate += r.hashrate ?? 0;
+      totalHashrateGh += r.hashrateGh ?? 0;
       totalAccepted += r.accepted ?? 0;
       totalRejected += r.rejected ?? 0;
     }
@@ -141,7 +181,7 @@ function printTable(results: MinerResult[]): void {
 
   console.log(separator);
   console.log(
-    `| ${'TOTAL'.padEnd(10)} | ${`${onlineCount}/${results.length} online`.padEnd(15)} |         | ${formatHashrate(totalHashrate).padStart(11)} | ${String(totalAccepted).padStart(8)} | ${String(totalRejected).padStart(8)} |       |        |`
+    `| ${'TOTAL'.padEnd(10)} | ${`${onlineCount}/${results.length} online`.padEnd(15)} |         | ${formatHashrateWithUnit(totalHashrateGh, 'GH/s').padStart(11)} | ${String(totalAccepted).padStart(8)} | ${String(totalRejected).padStart(8)} |       |        |`
   );
   console.log(separator);
 }
@@ -154,10 +194,9 @@ async function main() {
   console.log(`  Querying ${miners.length} miner(s)...`);
   console.log('═══════════════════════════════════════════════════════════════════════════════════════\n');
 
-  // Filter out placeholder IPs
-  const validMiners = miners.filter(m => 
-    !m.ip.startsWith('192.168.1.10') || process.env.MINER_IPS
-  );
+  // Filter out placeholder IPs only when using the defaults (to avoid accidental runs)
+  const placeholderIps = new Set(['192.168.1.100', '192.168.1.101', '192.168.1.102']);
+  const validMiners = process.env.MINER_IPS ? miners : miners.filter((m) => !placeholderIps.has(m.ip));
 
   if (validMiners.length === 0) {
     console.log('No miners configured. Set MINER_IPS environment variable or edit the script.\n');

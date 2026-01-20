@@ -1,5 +1,3 @@
-#!/usr/bin/env npx ts-node
-
 /**
  * Get Miner Info Example
  * 
@@ -18,6 +16,31 @@ import { CGMinerAPI } from '../src';
 
 const MINER_IP = process.env.MINER_IP || '192.168.1.100';
 const MINER_PORT = parseInt(process.env.MINER_PORT || '4028', 10);
+
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+function readFirstNumericField(
+  obj: Record<string, unknown>,
+  keys: string[]
+): { value?: number; key?: string } {
+  for (const k of keys) {
+    const v = toNumber(obj[k]);
+    if (v !== undefined) return { value: v, key: k };
+  }
+  return {};
+}
+
+function formatRate(value: number | undefined, unit: string): string {
+  if (value === undefined) return 'N/A';
+  return `${value} ${unit}`;
+}
 
 async function main() {
   console.log(`Fetching info from ${MINER_IP}:${MINER_PORT}...\n`);
@@ -53,8 +76,16 @@ async function main() {
       const summary = summaryResult.summaryTyped();
       if (summary && summary.length > 0) {
         const s = summary[0];
-        console.log(`  Hash Rate (5s):   ${s['GHS 5s'] ?? 'N/A'} GH/s`);
-        console.log(`  Hash Rate (avg):  ${s['GHS av'] ?? 'N/A'} GH/s`);
+        const sAny = s as unknown as Record<string, unknown>;
+        const hr5s = readFirstNumericField(sAny, ['GHS 5s', 'MHS 5s', 'KHS 5s']);
+        const hrAvg = readFirstNumericField(sAny, ['GHS av', 'MHS av', 'KHS av']);
+        const unit5s =
+          hr5s.key?.startsWith('GHS') ? 'GH/s' : hr5s.key?.startsWith('MHS') ? 'MH/s' : hr5s.key?.startsWith('KHS') ? 'KH/s' : 'H/s';
+        const unitAvg =
+          hrAvg.key?.startsWith('GHS') ? 'GH/s' : hrAvg.key?.startsWith('MHS') ? 'MH/s' : hrAvg.key?.startsWith('KHS') ? 'KH/s' : 'H/s';
+
+        console.log(`  Hash Rate (5s):   ${formatRate(hr5s.value, unit5s)}`);
+        console.log(`  Hash Rate (avg):  ${formatRate(hrAvg.value, unitAvg)}`);
         console.log(`  Accepted:         ${s.Accepted ?? 'N/A'}`);
         console.log(`  Rejected:         ${s.Rejected ?? 'N/A'}`);
         console.log(`  Hardware Errors:  ${s['Hardware Errors'] ?? 'N/A'}`);
@@ -97,7 +128,11 @@ async function main() {
           console.log(`     Name: ${dev.Name || 'N/A'}`);
           console.log(`     Status: ${dev.Status || 'N/A'}`);
           console.log(`     Temperature: ${dev.Temperature ?? 'N/A'}°C`);
-          console.log(`     Hash Rate: ${dev['GHS 5s'] ?? dev['MHS 5s'] ?? 'N/A'} GH/s`);
+          const dAny = dev as unknown as Record<string, unknown>;
+          const devRate = readFirstNumericField(dAny, ['GHS 5s', 'MHS 5s', 'KHS 5s']);
+          const devUnit =
+            devRate.key?.startsWith('GHS') ? 'GH/s' : devRate.key?.startsWith('MHS') ? 'MH/s' : devRate.key?.startsWith('KHS') ? 'KH/s' : 'H/s';
+          console.log(`     Hash Rate: ${formatRate(devRate.value, devUnit)}`);
         });
       } else {
         console.log('  No device info available');

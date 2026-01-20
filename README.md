@@ -1,10 +1,11 @@
 # fms-core
 
-**Modern TypeScript CGMiner API Library - Zero Dependencies**
+## Modern TypeScript CGMiner API Library - Zero Dependencies
 
 A comprehensive, production-ready TypeScript library for communicating with **any CGMiner-compatible Bitcoin miner**. Works with Avalon, Antminer, and other CGMiner-based miners. Includes Avalon-specific extensions for firmware upgrade and MM3 features.
 
-**Key Features:**
+## Key Features
+
 - ✅ **Works with any CGMiner-compatible miner** (Avalon, Antminer, etc.)
 - ✅ **Zero runtime dependencies** - lightweight and fast
 - ✅ **Full TypeScript support** with comprehensive type definitions
@@ -62,10 +63,10 @@ const stats = await CGMinerAPI.estats(ip, port);
 console.log('Stats:', stats.estatsTyped() ?? stats.estats());
 
 // Pool management (add, remove, switch, enable, disable)
-await CGMinerAPI.addPool(ip, port, 'stratum+tcp://pool.example.com:3333', 'user', 'pass');
-await CGMinerAPI.switchPool(ip, port, 0); // Switch to pool 0
-await CGMinerAPI.enablePool(ip, port, 0);
-await CGMinerAPI.disablePool(ip, port, 1);
+await CGMinerAPI.addPool(ip, 'stratum+tcp://pool.example.com:3333', 'user', 'pass', port);
+await CGMinerAPI.switchPool(ip, 0, port); // Switch to pool 0
+await CGMinerAPI.enablePool(ip, 0, port);
+await CGMinerAPI.disablePool(ip, 1, port);
 
 // Option B: instance client (recommended when you talk to one miner repeatedly)
 const client = new CGMinerClient({ host: ip, port, firstTimeout: 2, retry: 0 });
@@ -131,11 +132,11 @@ Main API class for communicating with **any CGMiner-compatible miner**.
 - `pools(ip, port?, firstTimeout?, retry?)` - Get pool configuration
 - `edevs(ip, port?, firstTimeout?, retry?)` - Get device information
 - `estats(ip, port?, firstTimeout?, retry?)` - Get extended statistics
-- `addPool(ip, port, url, user, pass, ...)` - Add a mining pool
-- `removePool(ip, port, poolId)` - Remove a pool
-- `switchPool(ip, port, poolId)` - Switch to a different pool
-- `enablePool(ip, port, poolId)` - Enable a pool
-- `disablePool(ip, port, poolId)` - Disable a pool
+- `addPool(ip, url, user, pass, port?, firstTimeout?, retry?)` - Add a mining pool
+- `removePool(ip, poolId, port?, firstTimeout?, retry?)` - Remove a pool
+- `switchPool(ip, poolId, port?, firstTimeout?, retry?)` - Switch to a different pool
+- `enablePool(ip, poolId, port?, firstTimeout?, retry?)` - Enable a pool
+- `disablePool(ip, poolId, port?, firstTimeout?, retry?)` - Disable a pool
 - `config(ip, port, ...)` - Configure miner settings
 - `toggleLED(ip, devId, modId, port?, firstTimeout?, retry?)` - Toggle LED (if supported)
 - `turnLED(ip, devId, modId, turnOn, port?, firstTimeout?, retry?)` - Turn LED on/off (if supported)
@@ -179,16 +180,19 @@ const aupFile = new AUPFile('/path/to/firmware.aup');
 
 ### Quick Start
 
-**Option 1: Using Environment Variables (Recommended)**
+#### Option 1: Using Environment Variables (Recommended)
+
 1. Copy `.env.example` to `.env`: `cp .env.example .env`
 2. Edit `.env` and add your miner IPs
 3. Run: `npm run test:miners`
 
-**Option 2: Direct Configuration**
+#### Option 2: Direct Configuration
+
 1. Edit `scripts/test-miners.ts` and replace placeholder IPs (`192.168.1.100`, `192.168.1.101`) with your actual miner IPs
 2. Run: `npm run test:miners`
 
 ### Integration Tests
+
 1. Configure miners using `.env` file or edit `tests/integration/miners.test.ts`
 2. Run: `INTEGRATION_TESTS=true npm run test:integration`
 
@@ -222,6 +226,6 @@ Apache License 2.0
 
 ## Links
 
-- Original Python version: https://github.com/Canaan-Creative/fms-core
-- This TypeScript port: https://github.com/adamrobbie/fms-core-ts
-- Python reference implementation: https://github.com/Canaan-Creative/fms-core (see `python-reference/` in that repo)
+- Original Python version: <https://github.com/Canaan-Creative/fms-core>
+- This TypeScript port: <https://github.com/adamrobbie/fms-core-ts>
+- Python reference implementation: <https://github.com/Canaan-Creative/fms-core> (see `python-reference/` in that repo)

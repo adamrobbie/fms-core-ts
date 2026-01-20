@@ -1,5 +1,3 @@
-#!/usr/bin/env npx ts-node
-
 /**
  * Avalon Firmware Upgrade Example
  * 
